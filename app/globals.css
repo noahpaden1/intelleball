@@ -50,12 +50,19 @@
   }
 }
 
-/* Gradient text — used for headline highlights */
+/* Gradient text — used for headline highlights.
+   background-clip: text paints only inside the element's box, and the
+   display scale's 1.03 line-height makes that box shorter than the glyphs:
+   descenders (g, y) and tall ascenders would hang outside it and turn
+   transparent. Padding grows the paint area past the line box; the equal
+   negative margins hand the space back, so layout is unchanged. */
 @utility gradient-text {
   background-image: var(--gradient-spectrum);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  padding: 0.18em 0.08em;
+  margin: -0.18em -0.08em;
 }
 
 /* Apple-style glass: heavy blur + saturation boost */
