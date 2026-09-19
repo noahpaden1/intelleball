@@ -1,26 +1,260 @@
 @import "tailwindcss";
+@import "./theme.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Font stack — wired to next/font in app/layout.tsx */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-schibsted), var(--font-inter), ui-sans-serif,
+    system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(41, 151, 255, 0.35);
+    color: #f5f5f7;
+  }
+
+  /* Display voice (Schibsted Grotesk) on every semantic heading — covers
+     the whole site, frozen showcases included, without touching them.
+     Eyebrows/lead/body are <p> and stay Inter; existing tracking tokens
+     already match what Schibsted wants at these sizes. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+
+  /* Diegetic UI inside decorative mockups (e.g. the DeviceFrame phone,
+     which renders aria-hidden) keeps the app's own face — a heading in a
+     hidden decorative subtree is mockup content, not site voice. */
+  [aria-hidden="true"] :is(h1, h2, h3, h4) {
+    font-family: var(--font-sans);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Gradient text — used for headline highlights */
+@utility gradient-text {
+  background-image: var(--gradient-spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Apple-style glass: heavy blur + saturation boost */
+@utility glass {
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  background-color: rgba(0, 0, 0, 0.62);
+}
+
+@utility glass-heavy {
+  backdrop-filter: saturate(180%) blur(40px);
+  -webkit-backdrop-filter: saturate(180%) blur(40px);
+  background-color: rgba(0, 0, 0, 0.82);
+}
+
+/* Pointer-spotlight card chrome (components/ui/SpotlightCard):
+   ::before carries the 1px mask-composite border glow, ::after the white
+   hot core riding the same ring. Activates on hover (fine pointers only)
+   and :focus-within (keyboard parity — the gradient's 50% fallback centers
+   the glow). Where mask-composite is unsupported, a static accent-tinted
+   ring stands in. Zero background-attachment: fixed anywhere (iOS bug). */
+@utility spotlight-card {
+  &::before,
+  &::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 350ms var(--ease-glide);
+  }
+
+  /* Border glow — per-accent, pointer-anchored: SpotlightCard sets
+     --spot-ring to var(--gradient-spot-ring-{accent}); the spectrum
+     sweep remains only as a bare-use fallback. */
+  &::before {
+    background: var(--spot-ring, var(--gradient-spectrum));
+  }
+
+  /* White core — half-size radial at the pointer, on the same ring */
+  &::after {
+    background: radial-gradient(
+      120px 120px at var(--spot-x, 50%) var(--spot-y, 50%),
+      rgba(255, 255, 255, 0.5),
+      transparent 70%
+    );
+  }
+
+  @supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+    &::before,
+    &::after {
+      padding: 1px;
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask-composite: exclude;
+    }
+  }
+
+  @supports not ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+    /* Fallback: static 1px accent-tinted ring on activation — per-accent
+       via --spot-ring-solid (set by SpotlightCard). */
+    &::before {
+      background: none;
+      border: 1px solid var(--spot-ring-solid, rgba(41, 151, 255, 0.35));
+    }
+    &::after {
+      display: none;
+    }
+  }
+
+  @media (hover: hover) {
+    &:hover::before,
+    &:hover::after {
+      opacity: 1;
+    }
+  }
+
+  &:focus-within::before,
+  &:focus-within::after {
+    opacity: 1;
+  }
+
+  /* Touch / no-hover devices never see the spotlight chrome */
+  @media (hover: none) {
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+}
+
+/* Faint cross-hatch backdrop (PillarsStory stage, Experience timeline).
+   Experience overrides alpha/mask via inline style. */
+@utility grid-lines {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 54px 54px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    #000 70%,
+    transparent
+  );
+  mask-image: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    #000 70%,
+    transparent
+  );
+}
+
+/* SeamPulse — the traveling light chip on section seams.
+   Animates TRANSFORM, never `left`: a layout-property animation can't be
+   composited and would keep main-thread style/layout/paint ticking for
+   the page's whole lifetime. The chip is statically positioned at the
+   container's left edge; translateX(100vw) matches `left: 100%` on the
+   full-bleed seams (the overflow-hidden parent clips any scrollbar-width
+   discrepancy). The base transform parks it off-screen, so the
+   reduced-motion `animation: none` state shows a clean static hairline
+   instead of a stranded 160px gradient sliver. */
+@keyframes seam-slide {
+  from {
+    transform: translateX(-160px);
+  }
+  to {
+    transform: translateX(100vw);
+  }
+}
+
+@utility seam-chip {
+  transform: translateX(-160px); /* parked out of view when not animating */
+  animation: seam-slide 12s var(--ease-glide) infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* AmbientDrift — accent radials adrift behind the black scroll stretches
+   (components/art/AmbientDrift.tsx). Soft edges are the gradient falloff
+   itself — no blur/goo filters — so each blob is one idle composited
+   quad. Keyframes animate TRANSFORM ONLY: tracks a/b wander with a
+   gentle swell; track c rotates around the off-center transform-origin
+   the component sets inline — the radially symmetric gradient hides the
+   spin, leaving a slow orbit of the blob's center. ease-in-out +
+   alternate keeps endpoint velocity ~0, so direction reversals are
+   seamless and the non-matching a/b endpoints never jump. The component
+   varies duration and negative delay per blob (via the --ambient-* vars
+   this utility reads), so the ensemble never visibly loops. Reduced
+   motion: animation off — blobs hold their authored parked positions, a
+   designed static composition, with no JS in either state. */
+@keyframes ambient-drift-a {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(9%, -7%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-6%, 5%, 0) scale(0.96);
+  }
+}
+
+@keyframes ambient-drift-b {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-6%, 8%, 0) scale(0.94);
+  }
+  100% {
+    transform: translate3d(5%, -8%, 0) scale(1.06);
+  }
+}
+
+@keyframes ambient-drift-c {
+  from {
+    transform: rotate(0turn);
+  }
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@utility ambient-blob {
+  animation: var(--ambient-anim, none) var(--ambient-dur, 40s) ease-in-out
+    var(--ambient-delay, 0s) infinite alternate;
+  /* Inherited from the AmbientDrift wrapper: `paused` while the zone is
+     off-viewport (IO-driven), because browsers do not reliably throttle
+     offscreen compositor animations. Pausing freezes the clock, keeping
+     the negative-delay decorrelation intact for re-entry. */
+  animation-play-state: var(--ambient-play, running);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }

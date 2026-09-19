@@ -1,0 +1,79 @@
+/* ════════════════════════════════════════════════════════ */
+/*  GENERATED FILE — do not edit.                            */
+/*  Source of truth: theme.config.mjs  ·  npm run theme      */
+/* ════════════════════════════════════════════════════════ */
+
+@theme {
+  /* colors → bg-*, text-*, border-* utilities */
+  --color-canvas: #000000;
+  --color-surface: #0b0b0f;
+  --color-raised: #17171b;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --color-ink: #f5f5f7;
+  --color-ink-mid: #a1a1a6;
+  --color-ink-dim: #86868b;
+  --color-azure: #2997ff;
+  --color-azure-deep: #1470e6;
+  --color-violet: #bf5af2;
+  --color-rose: #ff375f;
+  --color-mint: #30d158;
+
+  /* radii → rounded-* utilities */
+  --radius-card: 1.5rem;
+  --radius-panel: 1rem;
+  --radius-pill: 999px;
+
+  /* easings → ease-* utilities */
+  --ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-swing: cubic-bezier(0.83, 0, 0.17, 1);
+  --ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* type scale → text-* utilities */
+  --text-display: clamp(2.9rem, 6.5vw + 1rem, 6rem);
+  --text-display--line-height: 1.03;
+  --text-display--letter-spacing: -0.03em;
+  --text-display--font-weight: 600;
+  --text-headline: clamp(2rem, 3.5vw + 0.6rem, 3.5rem);
+  --text-headline--line-height: 1.08;
+  --text-headline--letter-spacing: -0.025em;
+  --text-headline--font-weight: 600;
+  --text-title: clamp(1.4rem, 1.4vw + 0.9rem, 2rem);
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.02em;
+  --text-title--font-weight: 600;
+  --text-lead: clamp(1.125rem, 0.6vw + 1rem, 1.375rem);
+  --text-lead--line-height: 1.5;
+  --text-lead--letter-spacing: -0.011em;
+  --text-lead--font-weight: 400;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.65;
+  --text-body--letter-spacing: -0.008em;
+  --text-body--font-weight: 400;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.5;
+  --text-caption--letter-spacing: 0;
+  --text-caption--font-weight: 400;
+  --text-eyebrow: 0.8125rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.14em;
+  --text-eyebrow--font-weight: 600;
+}
+
+:root {
+  /* gradients → var(--gradient-*) */
+  --gradient-spectrum: linear-gradient(120deg, #2997ff 0%, #bf5af2 55%, #ff375f 100%);
+  --gradient-hero-glow: radial-gradient(ellipse 80% 55% at 50% -15%, rgba(41, 151, 255, 0.26), rgba(191, 90, 242, 0.10) 45%, transparent 70%);
+  --gradient-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 40%, transparent);
+  --gradient-card-azure: radial-gradient(120% 120% at 20% 0%, rgba(41, 151, 255, 0.20), transparent 62%);
+  --gradient-card-violet: radial-gradient(120% 120% at 20% 0%, rgba(191, 90, 242, 0.20), transparent 62%);
+  --gradient-card-rose: radial-gradient(120% 120% at 20% 0%, rgba(255, 55, 95, 0.18), transparent 62%);
+  --gradient-scan-scrim: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 78%, #000 100%);
+  --gradient-deck-lip: linear-gradient(90deg, transparent, rgba(41,151,255,0.5) 30%, rgba(191,90,242,0.5) 70%, transparent);
+  --gradient-seam-pulse: linear-gradient(90deg, transparent, rgba(41,151,255,0.6), transparent);
+  --gradient-spot-azure: radial-gradient(240px 240px at var(--spot-x,50%) var(--spot-y,50%), rgba(41,151,255,0.12), transparent 70%);
+  --gradient-spot-violet: radial-gradient(240px 240px at var(--spot-x,50%) var(--spot-y,50%), rgba(191,90,242,0.12), transparent 70%);
+  --gradient-spot-rose: radial-gradient(240px 240px at var(--spot-x,50%) var(--spot-y,50%), rgba(255,55,95,0.10), transparent 70%);
+  --gradient-spot-ring-azure: radial-gradient(280px 280px at var(--spot-x,50%) var(--spot-y,50%), rgba(41,151,255,0.8), rgba(41,151,255,0.15) 70%);
+  --gradient-spot-ring-violet: radial-gradient(280px 280px at var(--spot-x,50%) var(--spot-y,50%), rgba(191,90,242,0.8), rgba(191,90,242,0.15) 70%);
+  --gradient-spot-ring-rose: radial-gradient(280px 280px at var(--spot-x,50%) var(--spot-y,50%), rgba(255,55,95,0.7), rgba(255,55,95,0.12) 70%);
+}
