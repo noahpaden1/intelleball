@@ -5,19 +5,27 @@
  * every number on the dashboard is generated here from a seed derived from
  * the signed-in user's email — stable across reloads, different per
  * account, and physically consistent: apex height and hang time follow
- * from the release angle and speed through the same projectile equations
- * the Flight showcase uses. Labelled as simulated wherever it is shown.
+ * from the launch angle and ball speed through the same projectile
+ * equations the Flight showcase uses. Labelled as simulated wherever it is
+ * shown.
  */
 
+/**
+ * One kick. The type keeps its original name (and its `release*` field)
+ * because the dashboard imports it; "release" here means the ball leaving
+ * the foot.
+ */
 export interface ThrowRecord {
   id: number;
   /** Unix ms, anchored to the `now` passed at generation time. */
   at: number;
   spinRpm: number;
+  /** Ball speed off the foot, m/s */
   releaseMps: number;
   angleDeg: number;
   apexM: number;
   hangS: number;
+  /** Peak of the ground bounce, g — capped at the ±16 g full scale the ball will run at */
   impactG: number;
 }
 
@@ -28,6 +36,7 @@ export interface DeviceStatus {
 }
 
 export interface DemoSession {
+  /** The session's kicks, oldest first — the field name is part of the dashboard's contract. */
   throws: ThrowRecord[];
   avgSpinRpm: number;
   peakReleaseMps: number;
@@ -36,10 +45,21 @@ export interface DemoSession {
 }
 
 const G = 9.81;
-/** Release height above the ground (m) — matches the showcases. */
-export const RELEASE_HEIGHT_M = 2.0;
-/** Height at which a throw is considered caught / landed (m). */
-export const CATCH_HEIGHT_M = 0.3;
+/**
+ * Height of the ball's centre at the kick, m: one ball radius, a ball
+ * kicked off the ground — matches the showcases.
+ */
+export const RELEASE_HEIGHT_M = 0.11;
+/** Height of the ball's centre when it lands back on the ground, m (the same radius). */
+export const CATCH_HEIGHT_M = 0.11;
+/**
+ * Accelerometer ceiling, g: the BNO055's widest ±16 g setting (datasheet),
+ * the range the ball will run at — the current firmware leaves the ±4 g
+ * default. A demo bounce reads no higher.
+ */
+const ACCEL_CEILING_G = 16;
+/** Launch angle a driven shot is coached toward, degrees; "best angle" is the kick closest to it. */
+const TARGET_ANGLE_DEG = 20;
 
 const TAU = Math.PI * 2;
 
@@ -76,19 +96,20 @@ const round = (v: number, decimals: number) => {
   return Math.round(v * k) / k;
 };
 
-/** Apex height and hang time for a release at `angleDeg` / `speed` (no drag). */
+/** Apex height and hang time for a kick at `angleDeg` / `speed` (no drag, no Magnus). */
 export function flightStats(angleDeg: number, speed: number) {
   const vy = speed * Math.sin((angleDeg * Math.PI) / 180);
   const apexM = RELEASE_HEIGHT_M + (vy * vy) / (2 * G);
-  // y(t) = h + vy·t − g·t²/2 = CATCH_HEIGHT → positive root
+  // y(t) = h + vy·t − g·t²/2 = CATCH_HEIGHT → positive root (2·vy/g when the heights match)
   const drop = RELEASE_HEIGHT_M - CATCH_HEIGHT_M;
   const hangS = (vy + Math.sqrt(vy * vy + 2 * G * drop)) / G;
   return { apexM, hangS };
 }
 
 /**
- * Build one session of `count` throws ending a couple of minutes before
- * `now`, spaced 60–150 s apart.
+ * Build one session of `count` kicks ending a couple of minutes before
+ * `now`, spaced 60–150 s apart. Ranges are a mix of driven shots and
+ * lofted passes: 12–28 m/s off the foot, 8–35° of launch, 150–550 rpm.
  */
 export function buildDemoSession(key: string, now: number, count = 12): DemoSession {
   const rand = mulberry32(fnv1a(key.trim().toLowerCase()));
@@ -101,9 +122,9 @@ export function buildDemoSession(key: string, now: number, count = 12): DemoSess
   }
 
   const throws: ThrowRecord[] = times.map((at, i) => {
-    const spinRpm = clamp(150 + gaussian(rand) * 22, 90, 220);
-    const releaseMps = clamp(7.5 + gaussian(rand) * 0.6, 5.5, 9.5);
-    const angleDeg = clamp(48 + gaussian(rand) * 3.5, 36, 60);
+    const spinRpm = clamp(330 + gaussian(rand) * 90, 150, 550);
+    const releaseMps = clamp(19.5 + gaussian(rand) * 3.5, 12, 28);
+    const angleDeg = clamp(20 + gaussian(rand) * 6, 8, 35);
     const { apexM, hangS } = flightStats(angleDeg, releaseMps);
     return {
       id: i + 1,
@@ -113,14 +134,16 @@ export function buildDemoSession(key: string, now: number, count = 12): DemoSess
       angleDeg: round(angleDeg, 1),
       apexM: round(apexM, 2),
       hangS: round(hangS, 2),
-      impactG: round(clamp(5.2 + gaussian(rand) * 0.8, 3, 8), 1),
+      // The bounce: hard enough to brush the sensor's ceiling, never above it.
+      impactG: round(clamp(12.5 + gaussian(rand) * 1.8, 8, ACCEL_CEILING_G), 1),
     };
   });
 
   const avgSpinRpm = Math.round(throws.reduce((s, r) => s + r.spinRpm, 0) / throws.length);
   const peakReleaseMps = Math.max(...throws.map((r) => r.releaseMps));
   const bestAngleDeg = throws.reduce(
-    (best, r) => (Math.abs(r.angleDeg - 48) < Math.abs(best - 48) ? r.angleDeg : best),
+    (best, r) =>
+      Math.abs(r.angleDeg - TARGET_ANGLE_DEG) < Math.abs(best - TARGET_ANGLE_DEG) ? r.angleDeg : best,
     throws[0].angleDeg
   );
 

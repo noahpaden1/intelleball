@@ -18,17 +18,20 @@ import {
   type DemoSession,
 } from "@/lib/demoData";
 import { reveal } from "@/lib/motion";
+import { useSensorFeed, type FeedStatus } from "@/lib/useSensorFeed";
 import { cn } from "@/lib/utils";
+import { live } from "@/content/live";
 import { site } from "@/content/site";
+import { LiveSensorPanel } from "./LiveSensorPanel";
 import { SessionChart } from "./SessionChart";
-import { LiveTrace } from "./LiveTrace";
 
 /**
  * /dashboard — the signed-in view. Client-only by nature: the session
  * lives in the browser, so the server renders the neutral shell and the
  * guard below redirects to /login once hydration reveals there is no
- * session. All telemetry is simulated (lib/demoData) until the ingest
- * link ships; the footer says so.
+ * session. The live panel reads the ball's real feed (lib/useSensorFeed);
+ * the per-kick session beneath it is still simulated (lib/demoData) until
+ * the motion pipeline lands, and the footer says so.
  */
 export function DashboardScreen() {
   const router = useRouter();
@@ -115,11 +118,16 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const [data] = useState<DemoSession>(() => buildDemoSession(session.user.email, now));
   const firstName = session.user.name.split(" ")[0];
   const { device } = site.dashboard;
+  // The real feed: polls Supabase while this screen is mounted (never on
+  // the pre-session shell). The greeting pill and device card follow it.
+  const feed = useSensorFeed();
+  const online = feed.status === "live";
+  const lastSyncMs = feed.latest ? Date.parse(feed.latest.created_at) : NaN;
 
   const tiles = [
-    { value: `${data.throws.length}`, label: "throws this session" },
+    { value: `${data.throws.length}`, label: "kicks this session" },
     { value: `${data.avgSpinRpm} rpm`, label: "average spin rate" },
-    { value: `${data.peakReleaseMps.toFixed(1)} m/s`, label: "peak release speed" },
+    { value: `${data.peakReleaseMps.toFixed(1)} m/s`, label: "peak ball speed" },
     { value: `${data.bestAngleDeg.toFixed(1)}°`, label: "best launch angle" },
   ];
 
@@ -144,9 +152,19 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
             </Reveal>
             <Reveal delay={0.12}>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-2 rounded-pill border border-mint/30 bg-mint/10 px-3 py-1 text-caption text-mint">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-mint" />
-                  Connected · {device.network}
+                <span
+                  className={cn(
+                    "flex items-center gap-2 rounded-pill border px-3 py-1 text-caption",
+                    online
+                      ? "border-mint/30 bg-mint/10 text-mint"
+                      : "border-line bg-raised text-ink-dim"
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn("h-1.5 w-1.5 rounded-full", online ? "bg-mint" : "bg-ink-dim")}
+                  />
+                  {signalLabel(feed.status)} · {device.network}
                 </span>
                 <span className="rounded-pill border border-line bg-raised px-3 py-1 font-mono text-caption text-ink-mid">
                   {device.name}
@@ -155,8 +173,13 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
             </Reveal>
           </div>
 
+          {/* Live feed — the real thing, full width */}
+          <Reveal delay={0.16} className="mt-10">
+            <LiveSensorPanel feed={feed} />
+          </Reveal>
+
           {/* Stat tiles */}
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {tiles.map((tile, i) => (
               <Reveal key={tile.label} delay={i * reveal.stagger}>
                 <div className="h-full rounded-panel border border-line bg-surface px-6 py-5">
@@ -172,7 +195,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
           {/* Chart + device */}
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <Reveal delay={0.1}>
-              <Panel title="Spin rate per throw" caption="rpm · simulated session">
+              <Panel title="Spin rate per kick" caption="rpm · simulated session">
                 <div className="mt-5">
                   <SessionChart throws={data.throws} />
                 </div>
@@ -182,6 +205,20 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
             <Reveal delay={0.16}>
               <Panel title={device.name} caption={`${device.board} · firmware ${device.firmware}`}>
                 <dl className="mt-5 space-y-3">
+                  <Row label={live.device.signalLabel}>
+                    <span className={cn("flex items-center gap-2", online && "text-mint")}>
+                      <span
+                        aria-hidden
+                        className={cn("h-1.5 w-1.5 rounded-full", online ? "bg-mint" : "bg-ink-dim")}
+                      />
+                      {signalLabel(feed.status)}
+                    </span>
+                  </Row>
+                  <Row label={live.device.lastSyncLabel}>
+                    <span className="font-mono tabular-nums">
+                      {Number.isNaN(lastSyncMs) ? live.nullValue : formatClock(lastSyncMs)}
+                    </span>
+                  </Row>
                   <Row label="Battery">
                     <div className="flex items-center gap-3">
                       <span className="relative h-1.5 w-24 overflow-hidden rounded-pill bg-raised">
@@ -201,34 +238,23 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
                       {device.network} · {data.device.rssiDbm} dBm
                     </span>
                   </Row>
-                  <Row label="Last sync">
-                    <span className="font-mono tabular-nums">{formatClock(data.device.lastSyncMs)}</span>
-                  </Row>
-                  <Row label="Sample rate">
-                    <span className="font-mono tabular-nums">100 Hz</span>
+                  <Row label={live.device.sampleRateLabel}>
+                    <span className="font-mono tabular-nums">{live.device.sampleRate}</span>
                   </Row>
                 </dl>
-                <div className="mt-6">
-                  <p className="flex items-center justify-between text-caption text-ink-dim">
-                    <span>Live |a| · at rest</span>
-                    <span className="font-mono">0–0.35 g</span>
-                  </p>
-                  <div className="mt-2 rounded-panel border border-line bg-raised/50 px-3 pt-2">
-                    <LiveTrace seed={data.throws.length * 31 + data.device.rssiDbm} />
-                  </div>
-                </div>
+                <p className="mt-6 text-caption text-ink-dim text-pretty">{live.device.simulatedNote}</p>
               </Panel>
             </Reveal>
           </div>
 
-          {/* Recent throws — the chart's table view */}
+          {/* Recent kicks — the chart's table view */}
           <Reveal delay={0.1} className="mt-6">
-            <Panel title="Recent throws" caption={`${data.throws.length} throws · newest first`}>
+            <Panel title="Recent kicks" caption={`${data.throws.length} kicks · newest first`}>
               <div className="-mx-6 mt-4 overflow-x-auto px-6">
                 <table className="w-full min-w-[640px] border-collapse text-caption">
                   <thead>
                     <tr className="text-left text-ink-dim">
-                      {["#", "Time", "Spin", "Release", "Angle", "Apex", "Hang", "Impact"].map((h, i) => (
+                      {["#", "Time", "Spin", "Speed", "Angle", "Apex", "Hang", "Impact"].map((h, i) => (
                         <th
                           key={h}
                           scope="col"
@@ -263,9 +289,10 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
 
           <Reveal delay={0.1}>
             <p className="mt-8 text-caption text-ink-dim text-pretty">
-              Simulated data: the ball-to-browser telemetry link is on the roadmap for{" "}
-              {site.timeline.find((m) => m.id === "telemetry-link")?.dates}. Accounts and sessions
-              live only in this browser.
+              Simulated session: the kicks, spin chart and table above are generated locally until
+              the motion pipeline ships in{" "}
+              {site.timeline.find((m) => m.id === "motion-pipeline")?.dates}; only the live panel
+              reads the ball. Accounts and sessions live only in this browser.
             </p>
           </Reveal>
         </div>
@@ -284,6 +311,19 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
       </footer>
     </main>
   );
+}
+
+/**
+ * Greeting-pill / device-card wording for a feed status. Stale and error
+ * are kept apart: a ball resting for 10 s is "Idle", a failed read is the
+ * panel's own "Offline", and only an empty table is "No signal".
+ */
+function signalLabel(status: FeedStatus): string {
+  if (status === "live") return live.device.connected;
+  if (status === "connecting") return live.device.connecting;
+  if (status === "stale") return live.device.idle;
+  if (status === "error") return live.status.error.label;
+  return live.device.noSignal;
 }
 
 function Panel({

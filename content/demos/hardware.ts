@@ -9,7 +9,8 @@
  * sketch sleeps 10 ms per loop and reads VECTOR_LINEARACCEL (gravity
  * already removed), and the Wi-Fi bench test joins eduroam with
  * WPA2-Enterprise (PEAP). The shell and cushion carry no numbers: they
- * are design intent, worded as such.
+ * are design intent, worded as such — a sealed soccer-ball skin and a
+ * cushion sized for kicks, not a measurement.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -56,21 +57,21 @@ export interface StageLabels {
 export const demoHeader: DemoHeader = {
   kicker: "The sensor core · XIAO ESP32 + BNO055",
   headline: ["Inside", "the ball."],
-  lead: "A Seeed XIAO ESP32 and a Bosch BNO055 on one I²C bus, a LiPo cell and a charging coil, sealed at the ball's center of mass. Scroll to take it apart, layer by layer.",
+  lead: "A Seeed XIAO ESP32 and a Bosch BNO055 on one I²C bus, a LiPo cell and a charging coil, sealed at the soccer ball's center of mass. Scroll to take it apart, layer by layer.",
 };
 
 export const demoSteps: DemoStep[] = [
   {
     id: "shell",
     eyebrow: "Step 01 · The shell",
-    title: "A ball first.",
-    body: "Seamed and sealed, with nothing on the surface to give it away. If the electronics changed how it flies, the data would describe the wrong ball.",
+    title: "A soccer ball first.",
+    body: "A sealed, multi-panel soccer-ball skin with nothing on the surface to give it away: no port, no seam that does not belong. If the electronics changed how it flies or bounces, the data would describe the wrong ball.",
   },
   {
     id: "cushion",
     eyebrow: "Step 02 · The cushion",
-    title: "Impact stops here.",
-    body: "Between shell and core, a cushion takes every bounce and catch so the electronics never do, and holds the core at the center of mass.",
+    title: "The kick stops here.",
+    body: "Between skin and core, a cushion takes every kick and bounce so the electronics never do, and holds the core at the center of mass.",
   },
   {
     id: "core",
@@ -109,4 +110,4 @@ export const stageLabels: StageLabels = {
 
 /** Read by assistive tech in place of the decorative stage. */
 export const srSummary =
-  "The Intelleball hardware in four layers. The shell: a seamed, sealed outer sphere with nothing on its surface. The cushion: a layer between shell and core that absorbs impact and holds the core at the center of mass. The core: a small puck carrying a Seeed XIAO ESP32 for compute and Wi-Fi, a Bosch BNO055 nine-axis IMU, a LiPo cell and a wireless charging coil. The link: an I²C bus on GPIO 21 (SDA) and GPIO 22 (SCL) between the two boards, read every 10 milliseconds, with the ESP32 streaming samples over 2.4 GHz Wi-Fi, WPA2-Enterprise included, to the dashboard.";
+  "The Intelleball hardware in four layers. The shell: a sealed, multi-panel soccer-ball skin with nothing on its surface. The cushion: a layer between skin and core that isolates the core from kicks and bounces and holds it at the center of mass. The core: a small puck carrying a Seeed XIAO ESP32 for compute and Wi-Fi, a Bosch BNO055 nine-axis IMU, a LiPo cell and a wireless charging coil. The link: an I²C bus on GPIO 21 (SDA) and GPIO 22 (SCL) between the two boards, read every 10 milliseconds, with the ESP32 streaming samples over 2.4 GHz Wi-Fi, WPA2-Enterprise included, to the dashboard.";

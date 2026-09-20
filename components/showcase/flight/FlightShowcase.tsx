@@ -1,5 +1,5 @@
 /**
- * Flight-analysis showcase — from raw IMU motion to per-throw stats, and
+ * Flight-analysis showcase — from raw IMU motion to per-kick stats, and
  * the drift math that makes those stats trustworthy.
  *
  * Self-contained full-bleed section: intro (eyebrow / headline / lead),

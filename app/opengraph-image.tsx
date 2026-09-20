@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Intelleball · Every throw, measured in flight.";
+export const alt = "Intelleball · Every kick, measured in flight.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -92,7 +92,7 @@ export default function OpengraphImage() {
             color: "#6e6e73",
           }}
         >
-          SMART-BALL TELEMETRY · VIRGINIA TECH
+          SMART SOCCER BALL · VIRGINIA TECH
         </div>
         <div
           style={{

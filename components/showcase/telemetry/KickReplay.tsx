@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * THROW REPLAY — one simulated throw, sample by sample.
+ * KICK REPLAY — one simulated kick, sample by sample.
  *
  * A side-view stage (vector SVG, crisp at any DPI) flies the ball along
  * its projectile arc while three strip charts scroll the raw stream the
@@ -10,9 +10,12 @@
  * single MotionValue of simulated seconds; every visual — ball position,
  * seam rotation, flown arc, traces, readouts, phase chips — derives from
  * it via useTransform, so there is zero per-frame React state. The loop
- * pauses when the stage is offscreen or the tab is hidden, and
- * reduced-motion users get the completed end state: ball at rest, impact
- * spike on the chart, stillness gate re-engaged.
+ * pauses when the stage is offscreen or the tab is hidden. When the
+ * replay ends — and from the start for reduced-motion users — the stage
+ * holds the ball at rest after the roll-out with the stillness gate
+ * re-engaged, and the strip charts switch from their rolling window to
+ * the whole recording, kick and bounce spikes included (a second
+ * MotionValue, `full`, flips them; see StripChart).
  *
  * The recording is computed once at module scope (see simulate.ts) and is
  * deterministic, so the server-rendered t = 0 frame hydrates cleanly.
@@ -41,12 +44,12 @@ import {
   type PhaseAccent,
   type ReadoutId,
 } from "@/content/demos/telemetry";
-import { simulateThrow, type PhaseSpan, type Sample } from "./simulate";
+import { simulateKick, type PhaseSpan, type Sample } from "./simulate";
 import { StripChart, toStripSeries } from "./StripChart";
 
 /* ── The recording (module scope, fully deterministic) ─────────────────── */
 
-const REC = simulateThrow();
+const REC = simulateKick();
 const SAMPLES = REC.samples;
 const DT = REC.dt;
 const LAST = SAMPLES.length - 1;
@@ -66,28 +69,36 @@ function interp(t: number, pick: (s: Sample) => number): number {
 const px = (v: number) => Math.round(v * 100) / 100;
 const frac = (v: number) => Math.round(v * 1e4) / 1e4;
 
-/* ── Stage geometry (side view; metres → viewBox px, equal scale on both axes) ── */
+/* ── Stage geometry (side view; metres → viewBox px, equal scale on both axes) ──
+   A driven shot is long and flat — ~28 m of range for ~3 m of apex — so the
+   stage is wide and short, and the ball is drawn larger than scale. */
 
 const VB_W = 920;
-const VB_H = 460;
-const PX_PER_M = 95;
-const ORIGIN_X = 100; //  stage x of the release point (x = 0 m)
-const GROUND_Y = 400;
-const BALL_R = 14;
-/** Height of the ground line, m: the resting ball's centre sits one radius above it. */
+const VB_H = 250;
+const PX_PER_M = 26;
+const ORIGIN_X = 60; //  stage x of the foot (x = 0 m)
+const GROUND_Y = 190;
+const BALL_R = 10;
+/** Height of the ground line, m: the resting ball's centre sits one (drawn) radius above it. */
 const GROUND_H = SAMPLES[LAST].h - BALL_R / PX_PER_M;
+/** Ground ticks every metre, labelled every this many metres. */
+const TICK_LABEL_EVERY_M = 5;
 
 const sx = (x: number) => ORIGIN_X + x * PX_PER_M;
 const sy = (h: number) => GROUND_Y - (h - GROUND_H) * PX_PER_M;
 
 const RELEASE_I = Math.round(REC.release / DT);
-const IMPACT_I = Math.round(REC.impact / DT);
-const RELEASE_PT = { x: sx(SAMPLES[RELEASE_I].x), y: sy(SAMPLES[RELEASE_I].h) };
-const IMPACT_PT = { x: sx(SAMPLES[IMPACT_I].x), y: sy(SAMPLES[IMPACT_I].h) };
-const APEX_PT = { x: sx(interp(REC.apex, (s) => s.x)), y: sy(REC.stats.apexM) };
+const BOUNCE_I = Math.round(REC.bounce / DT);
+// Rounded like every bound MotionValue: these come through cos/sin, and an
+// engine that rounds them one ulp differently would fail hydration.
+const RELEASE_PT = { x: px(sx(SAMPLES[RELEASE_I].x)), y: px(sy(SAMPLES[RELEASE_I].h)) };
+const BOUNCE_PT = { x: px(sx(SAMPLES[BOUNCE_I].x)), y: px(sy(SAMPLES[BOUNCE_I].h)) };
+const APEX_PT = { x: px(sx(interp(REC.apex, (s) => s.x))), y: px(sy(REC.stats.apexM)) };
+/** The kick annotation sits under the tick labels — the 250-tall stage has no room between them and the ground. */
+const KICK_LABEL_Y = GROUND_Y + 36;
 
-/** The flight arc, release → impact, through every sample. */
-const ARC = SAMPLES.slice(RELEASE_I, IMPACT_I + 1);
+/** The flight arc, foot → ground, through every sample. */
+const ARC = SAMPLES.slice(RELEASE_I, BOUNCE_I + 1);
 const ARC_D = ARC.map(
   (s, i) => `${i === 0 ? "M" : "L"}${sx(s.x).toFixed(1)} ${sy(s.h).toFixed(1)}`
 ).join(" ");
@@ -111,8 +122,11 @@ function flownFraction(t: number): number {
   return (a + (b - a) * f) / ARC_LEN;
 }
 
-/** Ground ticks every metre from the release point to the impact. */
-const GROUND_TICKS = Array.from({ length: Math.ceil(REC.stats.rangeM) + 1 }, (_, m) => m);
+/** Ground ticks every metre from the foot to where the roll-out ends. */
+const GROUND_TICKS = Array.from(
+  { length: Math.ceil(REC.stats.rangeM + REC.stats.rollM) + 1 },
+  (_, m) => m
+);
 
 /** Simulated seconds each annotation and phase chip takes to fade in/out. */
 const REVEAL = 0.08;
@@ -180,7 +194,7 @@ function PhaseChip({ elapsed, label, accent, span }: PhaseChipProps) {
 
 type ReplayStatus = "idle" | "running" | "done";
 
-export function ThrowReplay() {
+export function KickReplay() {
   // Hydration-safe: false on SSR + first client render, real value after mount
   const reduced = usePrefersReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -195,6 +209,8 @@ export function ThrowReplay() {
 
   /** Simulated elapsed seconds — the single source of truth. */
   const elapsed = useMotionValue(0);
+  /** 1 once the replay has ended: the strip charts show the whole recording instead of a rolling window. */
+  const full = useMotionValue(0);
   const simSec = useRef(0);
   const rafId = useRef<number | null>(null);
   const lastTs = useRef<number | null>(null);
@@ -202,7 +218,8 @@ export function ThrowReplay() {
   /* ── Derived visuals (no per-frame setState anywhere) ── */
 
   // The ball rides the recording; the seam turns by the accumulated spin
-  // (negative = backspin, counter-clockwise for a ball flying to the right).
+  // (backspin is counter-clockwise for a ball flying to the right, and the
+  // roll-out's forward roll turns it the other way).
   const ballX = useTransform(elapsed, (t) => px(sx(interp(t, (s) => s.x))));
   const ballY = useTransform(elapsed, (t) => px(sy(interp(t, (s) => s.h))));
   const seamRotate = useTransform(elapsed, (t) => -px(interp(t, (s) => s.spinDeg)));
@@ -210,16 +227,16 @@ export function ThrowReplay() {
   // The flown part of the arc draws over the dotted prediction.
   const flown = useTransform(elapsed, (t) => frac(flownFraction(t)));
 
-  // Event annotations reveal as the recording reaches them; impact flashes.
+  // Event annotations reveal as the recording reaches them; the bounce flashes.
   const releaseOpacity = useTransform(elapsed, [REC.release, REC.release + REVEAL], [0, 1]);
   const apexOpacity = useTransform(elapsed, [REC.apex, REC.apex + REVEAL], [0, 1]);
-  const impactOpacity = useTransform(elapsed, [REC.impact, REC.impact + REVEAL], [0, 1]);
+  const bounceOpacity = useTransform(elapsed, [REC.bounce, REC.bounce + REVEAL], [0, 1]);
   const flashOpacity = useTransform(
     elapsed,
-    [REC.impact, REC.impact + 0.04, REC.impact + 0.3],
+    [REC.bounce, REC.bounce + 0.04, REC.bounce + 0.3],
     [0, 0.55, 0]
   );
-  const flashScale = useTransform(elapsed, [REC.impact, REC.impact + 0.3], [0.3, 1.8]);
+  const flashScale = useTransform(elapsed, [REC.bounce, REC.bounce + 0.3], [0.3, 1.8]);
 
   // Live readouts.
   const readout: Record<ReadoutId, MotionValue<string>> = {
@@ -235,8 +252,9 @@ export function ThrowReplay() {
     if (reduced) {
       simSec.current = END;
       elapsed.jump(END);
+      full.jump(1);
     }
-  }, [reduced, elapsed]);
+  }, [reduced, elapsed, full]);
 
   /* ── The rAF loop — runs only while playing, in view, and tab-visible ── */
 
@@ -254,6 +272,7 @@ export function ThrowReplay() {
         simSec.current = Math.min(simSec.current + (now - lastTs.current) / MS_PER_SIM_SEC, END);
         elapsed.set(simSec.current);
         if (simSec.current >= END) {
+          full.set(1);
           stop();
           setStatus("done");
           return;
@@ -275,13 +294,14 @@ export function ThrowReplay() {
       document.removeEventListener("visibilitychange", sync);
       stop();
     };
-  }, [playing, inView, elapsed]);
+  }, [playing, inView, elapsed, full]);
 
   const replay = useCallback(() => {
     simSec.current = 0;
     elapsed.jump(0);
+    full.jump(0);
     setStatus("running");
-  }, [elapsed]);
+  }, [elapsed, full]);
 
   /* ── Render ── */
 
@@ -307,11 +327,12 @@ export function ThrowReplay() {
       </div>
 
       {/* Stage — pure vector, crisp at any resolution.
-          Horizontal scroll on narrow phones keeps the annotations legible. */}
+          Horizontal scroll on narrow phones keeps the annotations legible:
+          the minimum width holds the 12 px labels at 9 px or more. */}
       <div className="-mx-2 mt-8 overflow-x-auto px-2">
         <svg
           viewBox={`0 0 ${VB_W} ${VB_H}`}
-          className="h-auto w-full min-w-[540px]"
+          className="h-auto w-full min-w-[700px]"
           aria-hidden="true"
           focusable="false"
         >
@@ -319,7 +340,7 @@ export function ThrowReplay() {
             {STAGE.predictedArc}
           </text>
 
-          {/* Ground line with metre ticks from the release point */}
+          {/* Ground line with metre ticks from the foot */}
           <line
             x1={24}
             y1={GROUND_Y}
@@ -340,7 +361,7 @@ export function ThrowReplay() {
                 strokeOpacity={0.5}
                 strokeWidth={1}
               />
-              {m % 2 === 0 ? (
+              {m % TICK_LABEL_EVERY_M === 0 ? (
                 <text
                   x={sx(m)}
                   y={GROUND_Y + 24}
@@ -374,7 +395,7 @@ export function ThrowReplay() {
             style={{ pathLength: flown }}
           />
 
-          {/* Release point */}
+          {/* Where the ball leaves the foot */}
           <motion.g style={{ opacity: releaseOpacity }}>
             <circle
               cx={RELEASE_PT.x}
@@ -384,8 +405,8 @@ export function ThrowReplay() {
               stroke="var(--color-azure)"
               strokeWidth={1.5}
             />
-            <text x={RELEASE_PT.x + 16} y={RELEASE_PT.y + 28} fontSize={12} fill="var(--color-azure)">
-              {`${STAGE.release} · ${REC.stats.releaseSpeedMps.toFixed(1)} m/s · ${REC.stats.launchAngleDeg}°`}
+            <text x={RELEASE_PT.x + 14} y={KICK_LABEL_Y} fontSize={12} fill="var(--color-azure)">
+              {`${STAGE.kick} · ${REC.stats.ballSpeedMps.toFixed(1)} m/s · ${REC.stats.launchAngleDeg}°`}
             </text>
           </motion.g>
 
@@ -403,44 +424,44 @@ export function ThrowReplay() {
             </text>
           </motion.g>
 
-          {/* Impact: flash, then a persistent marker */}
+          {/* Bounce: flash, then a persistent marker (label off to the right, clear of the arc) */}
           <motion.circle
-            cx={IMPACT_PT.x}
-            cy={IMPACT_PT.y}
-            r={30}
+            cx={BOUNCE_PT.x}
+            cy={BOUNCE_PT.y}
+            r={24}
             fill="var(--color-rose)"
             style={{ opacity: flashOpacity, scale: flashScale }}
           />
-          <motion.g style={{ opacity: impactOpacity }}>
+          <motion.g style={{ opacity: bounceOpacity }}>
             <circle
-              cx={IMPACT_PT.x}
-              cy={IMPACT_PT.y}
+              cx={BOUNCE_PT.x}
+              cy={BOUNCE_PT.y}
               r={5}
               fill="none"
               stroke="var(--color-rose)"
               strokeWidth={1.5}
             />
-            <text x={IMPACT_PT.x + 22} y={IMPACT_PT.y + 4} fontSize={12} fill="var(--color-rose)">
-              {`${STAGE.impact} · ${REC.stats.impactPeakG} g`}
+            <text x={BOUNCE_PT.x + 12} y={BOUNCE_PT.y - 14} fontSize={12} fill="var(--color-rose)">
+              {`${STAGE.bounce} · ${REC.stats.bouncePeakG} g`}
             </text>
           </motion.g>
 
           {/* The ball: glow, body, and a seam mark that turns with the spin */}
           <motion.g style={{ x: ballX, y: ballY }}>
-            <circle r={BALL_R + 10} fill="var(--color-azure)" opacity={0.12} />
+            <circle r={BALL_R + 8} fill="var(--color-azure)" opacity={0.12} />
             <circle r={BALL_R} fill="var(--color-raised)" stroke="var(--color-azure)" strokeWidth={2} />
             <motion.g style={{ rotate: seamRotate }}>
               {/* An unpainted disc keeps this group's fill-box centred on the ball,
                   so the rotation pivots on the ball's centre, not the seam's bbox. */}
               <circle r={BALL_R} fill="none" />
               <path
-                d="M -9 -6 Q 0 -13 9 -6"
+                d="M -6.5 -4 Q 0 -9 6.5 -4"
                 fill="none"
                 stroke="var(--color-azure)"
                 strokeWidth={2}
                 strokeLinecap="round"
               />
-              <circle cy={-8.5} r={2} fill="var(--color-azure)" />
+              <circle cy={-6} r={1.6} fill="var(--color-azure)" />
             </motion.g>
           </motion.g>
         </svg>
@@ -476,7 +497,7 @@ export function ThrowReplay() {
       {/* Strip charts — a rolling window of each channel */}
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {SERIES.map(({ spec, series }) => (
-          <StripChart key={spec.id} elapsed={elapsed} spec={spec} series={series} />
+          <StripChart key={spec.id} elapsed={elapsed} full={full} spec={spec} series={series} />
         ))}
       </div>
     </div>

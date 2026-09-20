@@ -2,7 +2,7 @@
  * Drift simulation for the Drift Explorer — pure math, no React, no DOM.
  *
  * One recording of DRIFT_MODEL.windowS seconds at DRIFT_MODEL.sampleRateHz:
- * the ball is still, gets thrown once, and is still again. Two pipelines
+ * the ball is still, gets kicked once, and is still again. Two pipelines
  * turn the same simulated accelerometer into position and are compared
  * against the true motion. Every value is deterministic from a fixed seed
  * (mulberry32 — no Math.random anywhere), so the server and the client
@@ -11,9 +11,11 @@
  * Truth is one-dimensional, along the launch axis. Free flight is not
  * "coasting" on that axis: the BNO055's linear-acceleration output is
  * gravity-compensated, so a ball in free fall reports its real
- * acceleration — g — and the component along a 48° launch axis is
- * −g·sin 48° ≈ −7.3 m/s². That is also what keeps the stillness detector
- * from mistaking flight for rest.
+ * acceleration — g — and the component along a 22° launch axis is
+ * −g·sin 22° ≈ −3.7 m/s². That is also what keeps the stillness detector
+ * from mistaking flight for rest. The accelerometer here is ideal apart
+ * from noise and bias: no ±16 g ceiling, so the kick pulse (hundreds of g)
+ * integrates exactly — the telemetry section is where clipping is shown.
  */
 
 import { DRIFT_MODEL } from "@/content/demos/flight";
@@ -40,23 +42,23 @@ const STILL_SAMPLES = Math.max(
 
 /* ── Ground truth ─────────────────────────────────────────────────────── */
 
-const { startS, launchPulseS, flightS, catchPulseS } = DRIFT_MODEL.throw;
-const RELEASE_S = startS + launchPulseS;
-const CATCH_S = RELEASE_S + flightS;
-const REST_S = CATCH_S + catchPulseS;
+const { startS, kickPulseS, flightS, landingPulseS } = DRIFT_MODEL.kick;
+const RELEASE_S = startS + kickPulseS;
+const LANDING_S = RELEASE_S + flightS;
+const REST_S = LANDING_S + landingPulseS;
 
-/** The throw as the chart shades it: first movement to last. */
-export const THROW_WINDOW = { startS, endS: REST_S } as const;
+/** The kick as the chart shades it: first movement to last. */
+export const KICK_WINDOW = { startS, endS: REST_S } as const;
 
 /** Gravity's component along the launch axis — negative: it slows the ball. */
 const G_ALONG =
   -DRIFT_MODEL.gravityMs2 * Math.sin((DRIFT_MODEL.launchAngleDeg * Math.PI) / 180);
 /** Amplitude of a sin² pulse of length τ with a given area: ∫₀^τ A·sin²(πt/τ) dt = A·τ/2. */
 const pulseAmplitude = (area: number, tau: number) => (2 * area) / tau;
-const A_LAUNCH = pulseAmplitude(DRIFT_MODEL.releaseSpeedMs, launchPulseS);
-/** Speed left when the catch begins, after gravity has worked on the ball. */
-const V_AT_CATCH = DRIFT_MODEL.releaseSpeedMs + G_ALONG * flightS;
-const A_CATCH = -pulseAmplitude(V_AT_CATCH, catchPulseS);
+const A_KICK = pulseAmplitude(DRIFT_MODEL.ballSpeedMs, kickPulseS);
+/** Speed left when the landing begins, after gravity has worked on the ball. */
+const V_AT_LANDING = DRIFT_MODEL.ballSpeedMs + G_ALONG * flightS;
+const A_LANDING = -pulseAmplitude(V_AT_LANDING, landingPulseS);
 
 /** sin²(πt/τ) — written as a product, not `**`, so no engine reaches for pow. */
 const halfSineSquared = (t: number, tau: number) => {
@@ -67,9 +69,9 @@ const halfSineSquared = (t: number, tau: number) => {
 /** True acceleration along the launch axis at time t, m/s². */
 export function trueAcceleration(t: number): number {
   if (t < startS || t >= REST_S) return 0;
-  if (t < RELEASE_S) return A_LAUNCH * halfSineSquared(t - startS, launchPulseS);
-  if (t < CATCH_S) return G_ALONG;
-  return A_CATCH * halfSineSquared(t - CATCH_S, catchPulseS);
+  if (t < RELEASE_S) return A_KICK * halfSineSquared(t - startS, kickPulseS);
+  if (t < LANDING_S) return G_ALONG;
+  return A_LANDING * halfSineSquared(t - LANDING_S, landingPulseS);
 }
 
 /* ── Deterministic sensor noise ───────────────────────────────────────── */
@@ -126,7 +128,7 @@ const NOISE = gaussianSeries(DRIFT_MODEL.noiseSeed, N, DRIFT_MODEL.noiseSigmaMs2
  * 100 ms window centred on it stays under the threshold: the window mean
  * is what makes "sustained" robust to single noisy samples (a per-sample
  * test flickers once bias plus noise brush the threshold), and a centred
- * window is fair game for a pipeline that runs after the throw, on the
+ * window is fair game for a pipeline that runs after the kick, on the
  * whole recording. Exported for tests.
  */
 export function stillnessMask(aMeas: readonly number[]): boolean[] {

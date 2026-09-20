@@ -67,10 +67,10 @@ export const site = {
   ],
 
   hero: {
-    eyebrow: "Smart-ball telemetry · Virginia Tech",
+    eyebrow: "Smart soccer ball · Virginia Tech",
     // Rendered as two staggered segments; the second gets gradient text.
-    headline: ["Every throw,", "measured in flight."],
-    lead: "A nine-axis inertial core and a Wi-Fi radio, sealed at the center of the ball. Spin, release velocity, arc and impact, sampled at 100 Hz and on your dashboard before the ball stops rolling.",
+    headline: ["Every kick,", "measured in flight."],
+    lead: "A nine-axis inertial core and a Wi-Fi radio, sealed at the center of a soccer ball. Spin, ball speed off the foot, arc and impact, sampled at 100 Hz, built to be on your dashboard before the ball stops rolling.",
     primaryCta: { label: "See how it works", href: "#work" },
     secondaryCta: { label: "Open the dashboard", href: "/login" },
   },
@@ -90,7 +90,7 @@ export const site = {
     {
       eyebrow: "03 · Understand",
       title: "Numbers a coach can use.",
-      body: "Raw motion becomes spin rate, release velocity, arc and impact force: per-throw stats on a dashboard, with the drift math handled so the numbers hold up.",
+      body: "Raw motion becomes spin rate, ball speed off the foot, arc and impact force: per-kick stats on a dashboard, with the drift math handled so the numbers hold up.",
     },
   ],
 
@@ -100,7 +100,7 @@ export const site = {
       kicker: "Flagship · Sensing",
       title: "Live telemetry",
       summary:
-        "Every sample the BNO055 produces, linear acceleration, angular rate and orientation, leaves the ball over Wi-Fi as it happens. Below: one throw, replayed sample by sample.",
+        "Every sample the BNO055 produces, linear acceleration, angular rate and orientation, leaves the ball over Wi-Fi as it happens. Below: one kick, replayed sample by sample.",
       heroStat: { value: "100 Hz", label: "fused sensor output from the IMU" },
       metrics: [
         { value: "9-axis", label: "accelerometer + gyroscope + magnetometer" },
@@ -118,10 +118,10 @@ export const site = {
       kicker: "Flagship · Analysis",
       title: "Flight analysis",
       summary:
-        "Raw motion is not a stat. Between release and impact the pipeline turns acceleration and spin into numbers a coach can act on, with the integration drift bounded instead of ignored.",
+        "Raw motion is not a stat. Between the kick and the bounce the pipeline turns acceleration and spin into numbers a coach can act on, with the integration drift bounded instead of ignored.",
       heroStat: { value: "2×", label: "integrations from acceleration to position, where drift lives" },
       metrics: [
-        { value: "5", label: "stats per throw: spin, release speed, launch angle, apex, hang time" },
+        { value: "5", label: "stats per kick: spin, ball speed, launch angle, apex, hang time" },
         { value: "0 m/s", label: "velocity pinned at every detected stillness (zero-velocity update)" },
         { value: "100 Hz", label: "sample rate the model runs at" },
       ],
@@ -135,7 +135,7 @@ export const site = {
       kicker: "Flagship · Hardware",
       title: "The sensor core",
       summary:
-        "A Seeed XIAO ESP32 and a Bosch BNO055 on one I²C bus, with a LiPo cell and a charging coil, balanced at the ball's center of mass. Scroll to open it up.",
+        "A Seeed XIAO ESP32 and a Bosch BNO055 on one I²C bus, with a LiPo cell and a charging coil, balanced at the soccer ball's center of mass. Scroll to open it up.",
       heroStat: { value: "1", label: "I²C bus between the radio and the sensor" },
       metrics: [
         { value: "2", label: "boards: XIAO ESP32 + BNO055 breakout" },
@@ -170,7 +170,7 @@ export const site = {
       kicker: "Software",
       title: "Coach dashboard",
       summary:
-        "Accounts, per-throw history and live device status in the browser. Auth runs fully client-side today (PBKDF2-hashed, stored locally), ready to swap for a real backend when the telemetry link lands.",
+        "Accounts, per-kick history and live device status in the browser. Auth runs fully client-side today (PBKDF2-hashed, stored locally), ready to swap for a real backend when the telemetry link lands.",
       heroStat: { value: "0", label: "servers required to try it" },
       metrics: [
         { value: "PBKDF2", label: "password hashing, 100k iterations" },
@@ -186,10 +186,10 @@ export const site = {
   about: {
     heading: "Make the ball tell the truth.",
     paragraphs: [
-      "Intelleball started with a simple frustration: the only feedback most players get on a throw is the outcome. Made or missed, in or out. Everything that happened between the hand and the target, the spin, the release, the arc, is invisible unless a camera and a coach are both watching.",
-      "So we put the instrument inside the ball. A nine-axis IMU at the center of mass, an ESP32 to fuse and stream, and enough battery to last a session. Version 0.0.1 is on the bench today: the sensor talks, the radio joins a campus network, and the first motion prototype is running.",
+      "Intelleball started with a simple frustration: the only feedback most players get on a kick is the outcome. Goal or miss, on target or over the bar. Everything that happened between the foot and the goal, the spin, the speed off the foot, the arc, is invisible unless a camera and a coach are both watching.",
+      "So we put the instrument inside the soccer ball. A nine-axis IMU at the center of mass, an ESP32 to fuse and stream, and enough battery to last a session. Version 0.0.1 is on the bench today: the sensor talks, the radio joins a campus network, and the first motion prototype is running.",
       "The hard part is not reading a sensor. It is trusting it. Integrate acceleration twice and the position wanders off within seconds. The whole pipeline is built around bounding that error: integrating only between moments the ball is provably still, correcting velocity against every known stop, and taking spin straight from the gyroscope, where no integration is needed.",
-      "Next is the link from ball to browser: batched telemetry over Wi-Fi, a dashboard that shows every throw as it happens, and validation against high-speed video with real players. This site is the front door. The dashboard behind it is already live to try.",
+      "Next is the link from ball to browser: batched telemetry over Wi-Fi, a dashboard that shows every kick as it happens, and validation against high-speed video with real players. This site is the front door. The dashboard behind it is already live to try.",
     ],
     portraitCaption: "Built at Virginia Tech",
     portraitSub: "Noah Paden · Zachary Bezanson · Pranav Pothapragada",
@@ -214,10 +214,10 @@ export const site = {
       dates: "Fall 2026",
       title: "Motion pipeline",
       subtitle: "Drift-bounded stats",
-      description: "Turn raw samples into per-throw numbers that hold up.",
+      description: "Turn raw samples into per-kick numbers that hold up.",
       outcomes: [
         "Stillness detection on accelerometer + gyroscope (zero-velocity updates)",
-        "Per-throw windows with post-hoc velocity correction",
+        "Per-kick windows with post-hoc velocity correction",
         "Spin rate and spin axis straight from the gyroscope",
       ],
       status: "in-progress",
@@ -239,7 +239,7 @@ export const site = {
       id: "field-testing",
       dates: "2027",
       title: "Field testing",
-      subtitle: "Real players, real throws",
+      subtitle: "Real players, real kicks",
       description: "Validate the numbers against a camera, then tune.",
       outcomes: [
         "Side-by-side validation against high-speed video",
@@ -294,7 +294,7 @@ export const site = {
       {
         index: "01",
         title: "Measure, don't guess.",
-        body: "A coach's eye is a great instrument with terrible logging. The ball should carry its own sensor, keep its own record, and report what actually happened on every throw.",
+        body: "A coach's eye is a great instrument with terrible logging. The ball should carry its own sensor, keep its own record, and report what actually happened on every kick.",
       },
       {
         index: "02",
@@ -304,13 +304,13 @@ export const site = {
       {
         index: "03",
         title: "The ball should disappear.",
-        body: "If the electronics change how it flies, the data describes the wrong ball. Center-mounted, balanced, sealed, and light enough that nobody playing with it remembers it is there.",
+        body: "If the electronics change how it flies, the data describes the wrong ball. Center-mounted, balanced, sealed, and light enough that nobody kicking it remembers it is there.",
       },
     ],
   },
 
   contact: {
-    heading: "Want one in your hands?",
+    heading: "Want one at your feet?",
     body: "Intelleball is in active development at Virginia Tech. If you coach, train, or build hardware, we would like to hear from you. The firmware and this site are open source.",
   },
 
@@ -325,7 +325,7 @@ export const site = {
     signIn: {
       eyebrow: "Welcome back",
       title: "Sign in to your dashboard.",
-      lead: "Your throws, your device, your session history.",
+      lead: "Your kicks, your device, your session history.",
     },
     signUp: {
       eyebrow: "Get started",

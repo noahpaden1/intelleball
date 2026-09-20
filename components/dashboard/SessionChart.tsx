@@ -91,7 +91,7 @@ export function SessionChart({ throws }: SessionChartProps) {
   };
 
   const active = hover !== null ? geom.points[hover] : null;
-  const summary = `Spin rate per throw, ${throws.length} throws, from ${Math.min(
+  const summary = `Spin rate per kick, ${throws.length} kicks, from ${Math.min(
     ...throws.map((t) => t.spinRpm)
   )} to ${Math.max(...throws.map((t) => t.spinRpm))} rpm.`;
 
@@ -211,14 +211,14 @@ export function SessionChart({ throws }: SessionChartProps) {
           }}
         >
           <p className="font-mono text-ink-dim">
-            Throw {active.t.id} · {formatClock(active.t.at)}
+            Kick {active.t.id} · {formatClock(active.t.at)}
           </p>
           <p className="mt-1 flex items-baseline justify-between text-ink">
             <span>Spin</span>
             <span className="font-mono tabular-nums">{active.t.spinRpm} rpm</span>
           </p>
           <p className="flex items-baseline justify-between text-ink-mid">
-            <span>Release</span>
+            <span>Ball speed</span>
             <span className="font-mono tabular-nums">{active.t.releaseMps.toFixed(1)} m/s</span>
           </p>
           <p className="flex items-baseline justify-between text-ink-mid">

@@ -3,21 +3,22 @@
  *
  * Every word and number the section renders lives here; the components in
  * components/showcase/telemetry/ never hardcode copy. To change what the
- * section says, or what the simulated throw does, edit this file.
+ * section says, or what the simulated kick does, edit this file.
  *
  * Numbers policy (same as content/site.ts): sensor facts are BNO055
- * datasheet values — 100 Hz fused output, ±16 g, ±2000 °/s. The throw
+ * datasheet values — 100 Hz fused output, ±16 g, ±2000 °/s. The kick
  * itself is SIMULATED: a projectile model sampled at the sensor's real rate
  * with seeded measurement noise, and the copy says so. Nothing here is a
- * field recording.
+ * field recording. Drag and Magnus lift are left out, and for a soccer
+ * ball they are not small — the attribution says so.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
 /** Phases the motion pipeline reports, in timeline order. */
-export type PhaseId = "still" | "windup" | "release" | "flight" | "impact" | "rest";
+export type PhaseId = "still" | "kick" | "flight" | "bounce" | "roll" | "rest";
 
-/** mint = stillness gate satisfied · azure = the throw · rose = impact */
+/** mint = stillness gate satisfied · azure = the kick and the flight · rose = ground contact */
 export type PhaseAccent = "mint" | "azure" | "rose";
 
 export interface PhaseChip {
@@ -40,6 +41,8 @@ export interface StripChartSpec {
   ticks: number[];
   /** Decimals for the direct label on the trace's extreme; omit for no label */
   peakDecimals?: number;
+  /** Note appended to that label when the extreme sits on the sensor's ceiling */
+  peakClippedNote?: string;
 }
 
 export type ReadoutId = "time" | "spin" | "speed" | "height";
@@ -52,20 +55,27 @@ export interface ReadoutSpec {
 }
 
 /** Headline numbers derived from the simulated recording (see simulate.ts). */
-export interface ThrowStats {
-  releaseSpeedMps: number;
+export interface KickStats {
+  ballSpeedMps: number;
   launchAngleDeg: number;
-  backspinRpm: number;
-  /** Release → impact, s */
+  spinRpm: number;
+  /** Peak of the kick impulse the model actually applies, g — far above the ceiling */
+  kickPeakG: number;
+  /** What the accelerometer reports at most, g (its widest ±16 g full-scale setting) */
+  ceilingG: number;
+  /** How long the reading sits on that ceiling, ms */
+  kickMs: number;
+  /** Foot → ground contact, s */
   flightSec: number;
   apexM: number;
-  /** Horizontal distance from release to impact, m */
+  /** Horizontal distance from the kick to the bounce, m */
   rangeM: number;
-  impactSpeedMps: number;
-  impactPeakG: number;
-  impactMs: number;
-  /** Impact → stillness gate re-engaged, s */
-  settleSec: number;
+  landingSpeedMps: number;
+  bouncePeakG: number;
+  bounceMs: number;
+  /** Bounce → stillness gate re-engaged, s, and how far the ball rolled in that time, m */
+  rollSec: number;
+  rollM: number;
 }
 
 // ─── Section copy ─────────────────────────────────────────────────────────
@@ -76,15 +86,63 @@ export const PROJECT_ID = "live-telemetry";
 export const INTRO = {
   eyebrow: "Live telemetry · BNO055 at 100 Hz",
   /** Two TextReveal segments; the second is set in azure. */
-  headline: ["One throw,", "sample by sample."],
-  lead: "Every 10 ms the IMU at the ball's centre reports linear acceleration, angular rate and orientation, fused on-chip and pushed over Wi-Fi as it happens. Below, one simulated throw replayed at half speed: the raw stream, and the phases the pipeline reads out of it.",
+  headline: ["One kick,", "sample by sample."],
+  lead: "Every 10 ms the IMU at the ball's centre reports linear acceleration, angular rate and orientation, fused on-chip and pushed over Wi-Fi as it happens. Below, one simulated kick replayed at half speed: the raw stream, and the phases the pipeline reads out of it.",
+} as const;
+
+// ─── The simulated kick ───────────────────────────────────────────────────
+
+/** Projectile model inputs. Edit these and the whole replay follows. */
+export const PHYSICS = {
+  /** BNO055 fused output rate, Hz (datasheet) */
+  sampleHz: 100,
+  g: 9.81,
+  /** Ball radius, m: the centre of a ball on the ground sits this high */
+  ballRadiusM: 0.11,
+  /** A driven shot: speed off the foot, launch angle, backspin */
+  ballSpeedMps: 20,
+  launchAngleDeg: 22,
+  spinRpm: 300,
+  /** Spin decay time constant in flight, s — about 5 % lost over the flight */
+  spinDecayTauSec: 27,
+  /**
+   * Accelerometer full scale at its widest ±16 g setting, g (datasheet) —
+   * the range the ball will run at; the current firmware leaves the
+   * power-on ±4 g default. Every reading is clipped here.
+   */
+  accelCeilingG: 16,
+  /**
+   * The kick: a half-sine push along the launch direction that takes the
+   * ball from rest to `ballSpeedMps`. Foot contact is ~10 ms in reality;
+   * two samples at 100 Hz is the shortest event that draws a flat top, and
+   * the sensor's output filter smears a hit across neighbouring samples
+   * anyway. Its true peak is hundreds of g — the reading pins at the ceiling.
+   */
+  kickDurationSec: 0.02,
+  /** The ball waits on the ground this long before the kick */
+  stillSec: 0.4,
+  /**
+   * The bounce: a half-sine pulse whose peak sits just under the ceiling
+   * (a harder landing clips exactly like the kick). Coming off it the ball
+   * keeps this fraction of its landing speed and rolls; the second hop a
+   * real ball would take is folded into the roll-out.
+   */
+  bounce: { peakG: 15, durationSec: 0.03, speedFraction: 0.1 },
+  /**
+   * The roll-out: a rolling ball decelerates gently and steadily (grass),
+   * and turns at v / r — which is what keeps the gyro, not the
+   * accelerometer, holding the stillness gate open until it really stops.
+   */
+  roll: { decelG: 0.12 },
+  /** Samples of confirmed stillness kept after the gate re-engages, s */
+  holdSec: 0.1,
 } as const;
 
 export const REPLAY = {
-  title: "Throw replay",
-  body: "A ball at rest, a quarter-second wind-up, the flight, and a 6 g landing, the way the sensor would report it. Watch the acceleration: about zero while the ball is held still, exactly one g in free flight (gravity and nothing else), then a spike at impact that the stillness gate waits out.",
+  title: "Kick replay",
+  body: `A ball on the ground, a kick, the flight, a bounce and a roll-out, the way the sensor would report it. Watch the acceleration: about zero while the ball sits still, pinned at the sensor's widest ±${PHYSICS.accelCeilingG} g full scale for the kick itself (a ${Math.round(PHYSICS.kickDurationSec * 1000)} ms impulse in this model, well over a hundred g — more than the accelerometer can measure at any setting), exactly one g in free flight (gravity and nothing else), a second spike at the bounce, then ${PHYSICS.roll.decelG} g of rolling drag that the stillness gate waits out.`,
   button: { idle: "Replay", running: "Replaying…" },
-  /** Simulated seconds per real second: half speed, so the throw plays over ~5 s. */
+  /** Simulated seconds per real second: half speed, so the kick plays over ~7 s. */
   playbackRate: 0.5,
   /** Width of each strip chart's scrolling window, simulated seconds. */
   windowSec: 1.5,
@@ -95,58 +153,28 @@ export const REPLAY = {
 
 /** Annotations drawn on the flight stage. */
 export const STAGE = {
-  release: "release",
+  kick: "kick",
   apex: "apex",
-  impact: "impact",
-  predictedArc: "dotted: arc predicted from the release state",
+  bounce: "bounce",
+  predictedArc: "dotted: arc predicted from the state at the foot",
   distanceUnit: "m",
 } as const;
 
 export const ATTRIBUTION =
-  "Simulated, not recorded: the replay is generated from the projectile model at the sensor's real 100 Hz output rate, with seeded measurement noise, so every replay is identical.";
+  "Simulated, not recorded: the replay is generated from a drag-free projectile model at the sensor's real 100 Hz output rate, with seeded measurement noise, so every replay is identical. Drag and Magnus lift are omitted, and on a soccer ball at this speed they matter: a real shot lands shorter, and a curled one bends.";
 
 /** Outcome sentence for screen readers — the animation carries no extra meaning. */
-export function srSummary(s: ThrowStats): string {
+export function srSummary(s: KickStats): string {
   return (
-    `In this simulated throw the ball leaves the hand at ${s.releaseSpeedMps.toFixed(1)} metres per second ` +
-    `and ${s.launchAngleDeg} degrees with ${s.backspinRpm} rpm of backspin, peaks at ${s.apexM.toFixed(1)} metres, ` +
+    `In this simulated kick the ball leaves the foot at ${s.ballSpeedMps.toFixed(1)} metres per second ` +
+    `and ${s.launchAngleDeg} degrees with ${s.spinRpm} rpm of backspin, peaks at ${s.apexM.toFixed(1)} metres, ` +
     `and lands ${s.rangeM.toFixed(1)} metres away after ${s.flightSec.toFixed(2)} seconds of flight ` +
-    `at ${s.impactSpeedMps.toFixed(1)} metres per second. The accelerometer reads about 0 g while the ball is still, ` +
-    `1 g in free flight, and a ${s.impactPeakG} g spike lasting ${s.impactMs} milliseconds at impact; ` +
-    `the stillness gate re-engages ${s.settleSec.toFixed(2)} seconds after landing.`
+    `at ${s.landingSpeedMps.toFixed(1)} metres per second. The kick itself peaks near ${Math.round(s.kickPeakG)} g, ` +
+    `so the accelerometer clips at its ${s.ceilingG} g full-scale ceiling for ${s.kickMs} milliseconds; it reads about 0 g while the ball is still, ` +
+    `1 g in free flight, and a ${s.bouncePeakG} g spike lasting ${s.bounceMs} milliseconds at the bounce. ` +
+    `The ball then rolls ${s.rollM.toFixed(1)} metres and the stillness gate re-engages ${s.rollSec.toFixed(2)} seconds after landing.`
   );
 }
-
-// ─── The simulated throw ──────────────────────────────────────────────────
-
-/** Projectile model inputs. Edit these and the whole replay follows. */
-export const PHYSICS = {
-  /** BNO055 fused output rate, Hz (datasheet) */
-  sampleHz: 100,
-  g: 9.81,
-  releaseSpeedMps: 7.5,
-  launchAngleDeg: 48,
-  releaseHeightM: 2.0,
-  backspinRpm: 150,
-  /** Spin decay time constant in flight, s — about 5 % lost over the throw */
-  spinDecayTauSec: 27,
-  /** Height of the ball's centre at which the flight ends, m */
-  impactHeightM: 0.3,
-  /** Half-sine impact pulse: peak in g, duration in s */
-  impactPeakG: 6,
-  impactDurationSec: 0.03,
-  /** Pre-release timeline: held still, then the hand's push up to release */
-  stillSec: 0.4,
-  windupSec: 0.25,
-  /** Fraction of the wind-up spent ramping up before the push plateaus */
-  windupRiseFraction: 0.4,
-  /** After the pulse, what is left to decay away: as fractions of g, of the spin at impact, and of the impact speed */
-  settle: { accelG: 0.5, spinFraction: 0.5, speedFraction: 0.3 },
-  /** Decay time constant of that settle, s */
-  settleTauSec: 0.08,
-  /** Samples of confirmed stillness kept after the gate re-engages, s */
-  holdSec: 0.1,
-} as const;
 
 /** Seeded measurement noise, 1σ. */
 export const NOISE = {
@@ -160,16 +188,17 @@ export const DETECTOR = {
   /** Stillness gate: both must hold */
   stillAccelG: 0.15,
   stillGyroRpm: 2.5,
-  /** How long the release event stays lit before the chip hands over to flight, s */
-  releaseLatchSec: 0.12,
+  /** How long the kick and bounce events stay lit before the chip hands over, s */
+  kickLatchSec: 0.15,
+  bounceLatchSec: 0.15,
 } as const;
 
 export const PHASES: PhaseChip[] = [
   { id: "still", label: "Still", accent: "mint" },
-  { id: "windup", label: "Wind-up", accent: "azure" },
-  { id: "release", label: "Release", accent: "azure" },
+  { id: "kick", label: "Kick", accent: "azure" },
   { id: "flight", label: "Flight", accent: "azure" },
-  { id: "impact", label: "Impact", accent: "rose" },
+  { id: "bounce", label: "Bounce", accent: "rose" },
+  { id: "roll", label: "Roll", accent: "rose" },
   { id: "rest", label: "Still", accent: "mint" },
 ];
 
@@ -180,17 +209,18 @@ export const CHARTS: StripChartSpec[] = [
     symbol: "|a|",
     label: "Linear acceleration",
     unit: "g",
-    domain: [0, 8],
-    ticks: [0, 4, 8],
+    domain: [0, PHYSICS.accelCeilingG],
+    ticks: [0, PHYSICS.accelCeilingG / 2, PHYSICS.accelCeilingG],
     peakDecimals: 1,
+    peakClippedNote: "clipped",
   },
   {
     id: "gyro",
     symbol: "ω",
     label: "Angular rate",
     unit: "rpm",
-    domain: [0, 200],
-    ticks: [0, 100, 200],
+    domain: [0, 400],
+    ticks: [0, 200, 400],
   },
   {
     id: "height",

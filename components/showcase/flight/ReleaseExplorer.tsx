@@ -3,25 +3,27 @@
 /**
  * THE RELEASE EXPLORER — "Release explorer"
  *
- * Two range sliders (launch angle, release speed) drive a to-scale,
- * drag-free side view of the throw from a fixed release height, ending
- * where the arc comes back down through the target height — or, when the
- * apex never gets that high, at the ground, with the target readouts
- * declared undefined. The world extents are fixed, so the arc keeps one
- * scale while the sliders move. Closed-form projectile equations live in
- * projectile.ts. Entirely user-driven: no animation, plain state → SVG.
+ * Three range sliders (launch angle, ball speed, goal-line distance) drive
+ * a to-scale, drag-free side view of a kick off the ground: the arc runs
+ * from the foot back down to the turf, a dashed line marks the crossbar,
+ * and a post stands on the goal line, where the readouts say how high the
+ * ball crosses — or that it lands short. The world extents are fixed, so
+ * the arc keeps one scale while the sliders move; a kick that leaves the
+ * frame is clipped and its numbers still show in the readouts. Closed-form
+ * projectile equations live in projectile.ts. Entirely user-driven: no
+ * animation, plain state → SVG.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { RELEASE_COPY, RELEASE_MODEL } from "@/content/demos/flight";
-import { fixed, linePath, px, withUnit } from "./chart";
+import { fixed, linePath, px } from "./chart";
 import { arcPoints, solveRelease } from "./projectile";
 import { RangeSlider } from "./RangeSlider";
 
 /* ── Stage geometry (viewBox units, module scope, deterministic) ─────── */
 
 /** viewBox units per metre. */
-const SCALE = 40;
+const SCALE = 20;
 const PAD = { l: 56, r: 24, t: 28, b: 46 };
 const WORLD = RELEASE_MODEL.world;
 const PLOT_W = WORLD.widthM * SCALE;
@@ -36,17 +38,26 @@ const Y_TICKS = Array.from({ length: Math.floor(WORLD.heightM / TICK_M) + 1 }, (
 const sx = (metres: number) => px(PAD.l + metres * SCALE);
 const sy = (metres: number) => px(PAD.t + (WORLD.heightM - metres) * SCALE);
 
-const RELEASE_X = sx(0);
-const RELEASE_Y = sy(RELEASE_MODEL.releaseHeightM);
-const TARGET_Y = sy(RELEASE_MODEL.targetHeightM);
+const KICK_X = sx(0);
+const KICK_Y = sy(RELEASE_MODEL.ballRadiusM);
+const CROSSBAR_Y = sy(RELEASE_MODEL.crossbarHeightM);
 const GROUND_Y = sy(0);
+/** Labels flip to the left of their anchor this close to the plot's right edge. */
+const LABEL_FLIP_PX = 110;
+/** The kick label sits this far above its marker; an apex this close to it lifts its own label clear. */
+const KICK_LABEL_UP = 12;
+const APEX_CLEAR_PX = 24;
+
+/** Whether a world point lies inside the drawn plot — markers outside it are skipped. */
+const inPlot = (xM: number, yM: number) =>
+  xM >= 0 && xM <= WORLD.widthM && yM >= 0 && yM <= WORLD.heightM;
 
 /* ── Readout cell ──────────────────────────────────────────────────────── */
 
 interface ReadoutProps {
   label: string;
   value: string;
-  /** Dims the value when it is undefined for this throw. */
+  /** Dims the value when it is undefined for this kick. */
   muted?: boolean;
 }
 
@@ -72,9 +83,10 @@ function Readout({ label, value, muted = false }: ReadoutProps) {
 export function ReleaseExplorer() {
   const [angle, setAngle] = useState<number>(RELEASE_MODEL.angle.default);
   const [speed, setSpeed] = useState<number>(RELEASE_MODEL.speed.default);
+  const [goalLine, setGoalLine] = useState<number>(RELEASE_MODEL.goalLine.default);
 
-  const flight = solveRelease(angle, speed);
-  const arc = arcPoints(angle, speed, flight.endTimeS, RELEASE_MODEL.arcSamples);
+  const flight = solveRelease(angle, speed, goalLine);
+  const arc = arcPoints(angle, speed, flight.hangTimeS, RELEASE_MODEL.arcSamples);
   const arcD = linePath(
     arc.map((p) => sx(p.x)),
     arc.map((p) => sy(p.y))
@@ -82,22 +94,47 @@ export function ReleaseExplorer() {
 
   const apexX = sx(flight.apexRangeM);
   const apexY = sy(flight.apexM);
-  // Keep the apex label inside the plot: flip it to the left near the right edge.
-  const apexLabelRight = apexX < PAD.l + PLOT_W - 110;
+  // Keep labels inside the plot: flip them to the left near the right edge,
+  // and lift a low apex's label over the kick label at the origin.
+  const apexLabelRight = apexX < PAD.l + PLOT_W - LABEL_FLIP_PX;
+  const apexLabelY = KICK_Y - apexY < APEX_CLEAR_PX ? KICK_Y - KICK_LABEL_UP - 14 : apexY - 8;
+  const goalX = sx(goalLine);
+  const goalLabelRight = goalX < PAD.l + PLOT_W - LABEL_FLIP_PX;
+
+  const rawId = useId();
+  const clipId = `flight-release-clip-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   const angleText = fixed(angle, 0);
   const speedText = fixed(speed, 1);
   const apexText = fixed(flight.apexM, 2);
-  const summary = flight.target
+  const hangText = fixed(flight.hangTimeS, 2);
+  const rangeText = fixed(flight.rangeM, 2);
+  const goalText = fixed(goalLine, 1);
+  const shortfallText = fixed(goalLine - flight.rangeM, 2);
+  const verdict =
+    flight.verdict === "short"
+      ? RELEASE_COPY.verdictShort(shortfallText)
+      : RELEASE_COPY.verdict[flight.verdict];
+  const summary = flight.goalLine
     ? RELEASE_COPY.summary(
         angleText,
         speedText,
         apexText,
-        fixed(flight.target.hangTimeS, 2),
-        fixed(flight.target.rangeM, 2),
-        fixed(flight.target.entryAngleDeg, 1)
+        hangText,
+        rangeText,
+        goalText,
+        fixed(flight.goalLine.heightM, 2),
+        verdict
       )
-    : RELEASE_COPY.summaryUnreachable(angleText, speedText, apexText);
+    : RELEASE_COPY.summaryShort(
+        angleText,
+        speedText,
+        apexText,
+        hangText,
+        rangeText,
+        goalText,
+        shortfallText
+      );
 
   /* ── Render ── */
 
@@ -111,8 +148,8 @@ export function ReleaseExplorer() {
         </p>
       </div>
 
-      {/* Controls — side by side from sm, stacked on phones */}
-      <div className="mt-8 grid gap-6 sm:grid-cols-2">
+      {/* Controls — three across from sm, stacked on phones */}
+      <div className="mt-8 grid gap-6 sm:grid-cols-3">
         <RangeSlider
           label={RELEASE_COPY.angle.label}
           unit={RELEASE_COPY.angle.unit}
@@ -133,17 +170,34 @@ export function ReleaseExplorer() {
           decimals={1}
           onChange={setSpeed}
         />
+        <RangeSlider
+          label={RELEASE_COPY.goalLine.label}
+          unit={RELEASE_COPY.goalLine.unit}
+          min={RELEASE_MODEL.goalLine.min}
+          max={RELEASE_MODEL.goalLine.max}
+          step={RELEASE_MODEL.goalLine.step}
+          value={goalLine}
+          decimals={1}
+          onChange={setGoalLine}
+        />
       </div>
 
       {/* Side view — to scale, pure vector.
-          Horizontal scroll on narrow phones keeps the annotations legible. */}
+          Horizontal scroll on narrow phones keeps the annotations legible:
+          the minimum width holds the 11 px labels at 9 px or more. */}
       <div className="-mx-2 mt-8 overflow-x-auto px-2">
         <svg
           viewBox={`0 0 ${VB_W} ${VB_H}`}
-          className="h-auto w-full min-w-[540px]"
+          className="h-auto w-full min-w-[660px]"
           aria-hidden="true"
           focusable="false"
         >
+          <defs>
+            <clipPath id={clipId}>
+              <rect x={PAD.l} y={PAD.t} width={PLOT_W} height={PLOT_H} />
+            </clipPath>
+          </defs>
+
           {/* Grid — hairlines on both axes; a side view is a 2-D space */}
           {Y_TICKS.map((m) => (
             <g key={`y-${m}`}>
@@ -221,16 +275,22 @@ export function ReleaseExplorer() {
             strokeOpacity={0.6}
             strokeWidth={1}
           />
-          <text x={PAD.l + 6} y={GROUND_Y - 6} fontSize={11} fill="var(--color-ink-dim)">
+          <text
+            x={PAD.l + PLOT_W - 4}
+            y={GROUND_Y - 6}
+            textAnchor="end"
+            fontSize={11}
+            fill="var(--color-ink-dim)"
+          >
             {RELEASE_COPY.marks.ground}
           </text>
 
-          {/* Target height — the one dashed line: a threshold, not a gridline */}
+          {/* Crossbar — the one dashed line: a threshold, not a gridline */}
           <line
             x1={PAD.l}
             x2={PAD.l + PLOT_W}
-            y1={TARGET_Y}
-            y2={TARGET_Y}
+            y1={CROSSBAR_Y}
+            y2={CROSSBAR_Y}
             stroke="var(--color-ink-mid)"
             strokeOpacity={0.7}
             strokeWidth={1}
@@ -238,66 +298,106 @@ export function ReleaseExplorer() {
           />
           <text
             x={PAD.l + PLOT_W - 4}
-            y={TARGET_Y + 15}
+            y={CROSSBAR_Y - 6}
             textAnchor="end"
             fontSize={11}
             fill="var(--color-ink-mid)"
           >
-            {RELEASE_COPY.marks.target} · {fixed(RELEASE_MODEL.targetHeightM, 2)} m
+            {RELEASE_COPY.marks.crossbar} · {fixed(RELEASE_MODEL.crossbarHeightM, 2)} m
           </text>
 
-          {/* The arc */}
-          <path
-            d={arcD}
-            fill="none"
-            stroke="var(--color-violet)"
+          {/* Goal line — a post from the turf up to the bar, where the slider puts it */}
+          <line
+            x1={goalX}
+            x2={goalX}
+            y1={GROUND_Y}
+            y2={CROSSBAR_Y}
+            stroke="var(--color-ink-mid)"
+            strokeOpacity={0.9}
             strokeWidth={2}
-            strokeLinejoin="round"
             strokeLinecap="round"
           />
-
-          {/* Release point */}
-          <circle
-            cx={RELEASE_X}
-            cy={RELEASE_Y}
-            r={5}
-            fill="var(--color-violet)"
-            stroke="var(--color-surface)"
-            strokeWidth={2}
-          />
-          <text x={RELEASE_X + 10} y={RELEASE_Y + 16} fontSize={11} fill="var(--color-ink-mid)">
-            {RELEASE_COPY.marks.release} · {fixed(RELEASE_MODEL.releaseHeightM, 1)} m
-          </text>
-
-          {/* Apex */}
-          <circle
-            cx={apexX}
-            cy={apexY}
-            r={4}
-            fill="var(--color-violet)"
-            stroke="var(--color-surface)"
-            strokeWidth={2}
-          />
           <text
-            x={apexLabelRight ? apexX + 9 : apexX - 9}
-            y={apexY - 8}
-            textAnchor={apexLabelRight ? "start" : "end"}
+            x={goalLabelRight ? goalX + 8 : goalX - 8}
+            y={CROSSBAR_Y + 15}
+            textAnchor={goalLabelRight ? "start" : "end"}
             fontSize={11}
             fill="var(--color-ink-mid)"
             className="tabular-nums"
           >
-            {RELEASE_COPY.marks.apex} · {apexText} m
+            {RELEASE_COPY.marks.goalLine} · {goalText} m
           </text>
 
-          {/* Where the flight ends: on the target line, or on the ground */}
+          {/* The arc, clipped to the plot */}
+          <g clipPath={`url(#${clipId})`}>
+            <path
+              d={arcD}
+              fill="none"
+              stroke="var(--color-violet)"
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </g>
+
+          {/* The kick */}
           <circle
-            cx={sx(flight.endRangeM)}
-            cy={sy(flight.endHeightM)}
+            cx={KICK_X}
+            cy={KICK_Y}
             r={5}
             fill="var(--color-violet)"
             stroke="var(--color-surface)"
             strokeWidth={2}
           />
+          <text x={KICK_X + 10} y={KICK_Y - KICK_LABEL_UP} fontSize={11} fill="var(--color-ink-mid)">
+            {RELEASE_COPY.marks.kick}
+          </text>
+
+          {/* Apex — when it is inside the frame */}
+          {inPlot(flight.apexRangeM, flight.apexM) ? (
+            <>
+              <circle
+                cx={apexX}
+                cy={apexY}
+                r={4}
+                fill="var(--color-violet)"
+                stroke="var(--color-surface)"
+                strokeWidth={2}
+              />
+              <text
+                x={apexLabelRight ? apexX + 9 : apexX - 9}
+                y={apexLabelY}
+                textAnchor={apexLabelRight ? "start" : "end"}
+                fontSize={11}
+                fill="var(--color-ink-mid)"
+                className="tabular-nums"
+              >
+                {RELEASE_COPY.marks.apex} · {apexText} m
+              </text>
+            </>
+          ) : null}
+
+          {/* Where the ball crosses the goal line, and where it lands */}
+          {flight.goalLine && inPlot(goalLine, flight.goalLine.heightM) ? (
+            <circle
+              cx={goalX}
+              cy={sy(flight.goalLine.heightM)}
+              r={5}
+              fill="var(--color-violet)"
+              stroke="var(--color-surface)"
+              strokeWidth={2}
+            />
+          ) : null}
+          {inPlot(flight.rangeM, RELEASE_MODEL.ballRadiusM) ? (
+            <circle
+              cx={sx(flight.rangeM)}
+              cy={KICK_Y}
+              r={5}
+              fill="var(--color-violet)"
+              stroke="var(--color-surface)"
+              strokeWidth={2}
+            />
+          ) : null}
         </svg>
       </div>
 
@@ -307,31 +407,21 @@ export function ReleaseExplorer() {
       {/* Readouts — update instantly with the sliders */}
       <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Readout label={RELEASE_COPY.readouts.apex} value={`${apexText} m`} />
+        <Readout label={RELEASE_COPY.readouts.hangTime} value={`${hangText} s`} />
+        <Readout label={RELEASE_COPY.readouts.range} value={`${rangeText} m`} />
         <Readout
-          label={RELEASE_COPY.readouts.hangTime}
-          value={flight.target ? `${fixed(flight.target.hangTimeS, 2)} s` : "—"}
-          muted={!flight.target}
-        />
-        <Readout
-          label={RELEASE_COPY.readouts.range}
-          value={flight.target ? `${fixed(flight.target.rangeM, 2)} m` : "—"}
-          muted={!flight.target}
-        />
-        <Readout
-          label={RELEASE_COPY.readouts.entryAngle}
-          value={
-            flight.target
-              ? withUnit(fixed(flight.target.entryAngleDeg, 1), RELEASE_COPY.angle.unit)
-              : "—"
-          }
-          muted={!flight.target}
+          label={RELEASE_COPY.readouts.atGoalLine}
+          value={flight.goalLine ? `${fixed(flight.goalLine.heightM, 2)} m` : "—"}
+          muted={!flight.goalLine}
         />
       </dl>
-      {flight.target ? null : (
-        <p className="mt-4 max-w-2xl text-caption text-ink-mid text-pretty">
-          {RELEASE_COPY.unreachable(fixed(RELEASE_MODEL.targetHeightM - flight.apexM, 2))}
-        </p>
-      )}
+
+      {/* The verdict, in plain words — one line in every case, so the card
+          never changes height as the sliders move */}
+      <p className="mt-4 max-w-2xl text-body text-ink text-pretty" aria-hidden="true">
+        <span className="text-ink-dim">{RELEASE_COPY.verdictLabel} · </span>
+        {verdict}
+      </p>
     </div>
   );
 }

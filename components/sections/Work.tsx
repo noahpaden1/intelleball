@@ -29,7 +29,7 @@ export function Work() {
           <SectionHeading
             eyebrow="How it works"
             title="Sense it. Send it. Understand it."
-            lead="Three systems, one ball. Each one below is explorable: replay a throw as the sensor sees it, watch integration drift get bounded instead of ignored, and open the ball up layer by layer."
+            lead="Three systems, one soccer ball. Each one below is explorable: replay a kick as the sensor sees it, watch integration drift get bounded instead of ignored, and open the ball up layer by layer."
           />
         </div>
       </div>

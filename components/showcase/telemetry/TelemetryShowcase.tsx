@@ -2,8 +2,8 @@
  * Live Telemetry showcase — Intelleball's flagship sensing story.
  *
  * Self-contained full-bleed section: intro (eyebrow / headline / lead),
- * the Throw Replay, and closing stat chips. Accent: azure. Copy and the
- * simulated throw's parameters live in content/demos/telemetry.ts; the
+ * the Kick Replay, and closing stat chips. Accent: azure. Copy and the
+ * simulated kick's parameters live in content/demos/telemetry.ts; the
  * stat chips are the "live-telemetry" project's metrics in content/site.ts.
  *
  * Server component — the replay is a client component underneath.
@@ -15,7 +15,7 @@ import { TextReveal } from "@/components/motion/TextReveal";
 import { reveal } from "@/lib/motion";
 import { site } from "@/content/site";
 import { ATTRIBUTION, INTRO, PROJECT_ID } from "@/content/demos/telemetry";
-import { ThrowReplay } from "./ThrowReplay";
+import { KickReplay } from "./KickReplay";
 
 export function TelemetryShowcase() {
   const project = site.projects.find((p) => p.id === PROJECT_ID);
@@ -60,7 +60,7 @@ export function TelemetryShowcase() {
           <p className="mt-6 max-w-2xl text-lead text-ink-mid text-pretty">{INTRO.lead}</p>
         </Reveal>
 
-        {/* ── Interactive: the throw replay ── */}
+        {/* ── Interactive: the kick replay ── */}
         <Reveal className="mt-20 md:mt-28">
           <div className="relative overflow-hidden rounded-card border border-line bg-surface p-6 md:p-10">
             <div
@@ -69,7 +69,7 @@ export function TelemetryShowcase() {
               style={{ backgroundImage: "var(--gradient-panel-sheen)" }}
             />
             <div className="relative">
-              <ThrowReplay />
+              <KickReplay />
             </div>
           </div>
         </Reveal>

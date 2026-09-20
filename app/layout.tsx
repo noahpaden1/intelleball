@@ -27,7 +27,7 @@ const schibsted = Schibsted_Grotesk({
 });
 
 const description =
-  "A smart ball with a nine-axis inertial core and Wi-Fi inside. Spin, release velocity, arc and impact, sampled at 100 Hz and streamed to your dashboard.";
+  "A smart soccer ball with a nine-axis inertial core and Wi-Fi inside. Spin, ball speed off the foot, arc and impact, sampled at 100 Hz and streamed to your dashboard.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.domain),

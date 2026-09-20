@@ -3,9 +3,9 @@
 /**
  * THE DRIFT EXPLORER — "The drift problem"
  *
- * One 6 s recording with a single 1.2 s throw in it, integrated two ways
+ * One 6 s recording with a single 1.6 s kick in it, integrated two ways
  * from the same simulated accelerometer: naively from t = 0 (rose), and
- * through the Intelleball pipeline of stillness detection, per-throw
+ * through the Intelleball pipeline of stillness detection, per-kick
  * windows and post-hoc velocity correction (azure). The chart plots each
  * pipeline's position error against the true motion. Rose/azure is the
  * CVD-safe pair on the dark surface; mint is reserved for the stillness
@@ -25,7 +25,7 @@ import { motion } from "framer-motion";
 import { dur, ease, reveal } from "@/lib/motion";
 import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 import { DRIFT_COPY, DRIFT_MODEL, type DriftMode } from "@/content/demos/flight";
-import { simulateDrift, THROW_WINDOW } from "./drift";
+import { KICK_WINDOW, simulateDrift } from "./drift";
 import {
   extent,
   fixed,
@@ -52,9 +52,9 @@ const X_TICKS = Array.from({ length: T_MAX + 1 }, (_, i) => i);
 
 const xOf = (t: number) => px(PAD.l + (t / T_MAX) * PLOT_W);
 
-const BAND_X0 = xOf(THROW_WINDOW.startS);
-const BAND_X1 = xOf(THROW_WINDOW.endS);
-const THROW_SECONDS = fixed(THROW_WINDOW.endS - THROW_WINDOW.startS, 1);
+const BAND_X0 = xOf(KICK_WINDOW.startS);
+const BAND_X1 = xOf(KICK_WINDOW.endS);
+const KICK_SECONDS = fixed(KICK_WINDOW.endS - KICK_WINDOW.startS, 1);
 
 /* ── Y scales — fixed per mode so the slider visibly grows the curve ──── */
 
@@ -318,7 +318,7 @@ export function DriftExplorer() {
       <div className="-mx-2 mt-4 overflow-x-auto px-2">
         <svg
           viewBox={`0 0 ${VB_W} ${VB_H}`}
-          className="h-auto w-full min-w-[540px]"
+          className="h-auto w-full min-w-[600px]"
           aria-hidden="true"
           focusable="false"
           onPointerMove={onPointerMove}
@@ -330,7 +330,7 @@ export function DriftExplorer() {
             </clipPath>
           </defs>
 
-          {/* Throw window — violet wash with hairline edges, labelled inside */}
+          {/* Kick window — violet wash with hairline edges, labelled inside */}
           <rect
             x={BAND_X0}
             y={PAD.t}
@@ -357,10 +357,10 @@ export function DriftExplorer() {
             fill="var(--color-ink-mid)"
             style={{ letterSpacing: "0.06em" }}
           >
-            {DRIFT_COPY.throwBand(THROW_SECONDS)}
+            {DRIFT_COPY.kickBand(KICK_SECONDS)}
           </text>
           {/* Stillness markers — mint, the site's "trusted state" colour */}
-          {[THROW_WINDOW.startS / 2, (THROW_WINDOW.endS + T_MAX) / 2].map((t) => (
+          {[KICK_WINDOW.startS / 2, (KICK_WINDOW.endS + T_MAX) / 2].map((t) => (
             <text
               key={t}
               x={xOf(t)}

@@ -6,10 +6,11 @@
  *
  * Numbers policy: the sample rate is the fused-output rate the site quotes
  * for the BNO055 (100 Hz). Noise, the bias range, the stillness threshold
- * and the throw profile are model parameters chosen to be plausible for a
- * hand-thrown ball; the copy words them as a model, never a measurement.
- * Where a sentence quotes a parameter (1.2 s, 6 s, 0.15 m/s²) it must be
- * kept in step with the model objects below.
+ * and the kick profile are model parameters chosen to be plausible for a
+ * kicked soccer ball; the copy words them as a model, never a measurement.
+ * The pitch numbers (crossbar 2.44 m, ball radius 0.11 m) are the laws of
+ * the game. Where a sentence quotes a parameter (1.6 s, 6 s, 0.15 m/s²) it
+ * is interpolated from the model objects below, so it cannot drift.
  */
 
 import { site, type Metric } from "@/content/site";
@@ -21,10 +22,10 @@ export const FLIGHT_SECTION = {
   eyebrow: "Flight analysis · Drift-bounded stats",
   /** Two staggered headline segments; the second is tinted violet. */
   headline: ["From raw motion", "to a number you can coach."],
-  lead: "Position is two integrations away from what the accelerometer reports, and each one turns a small, constant sensor bias into an error that grows with time. Six seconds of naive integration can put the ball metres from where it is. The pipeline only ever integrates across one throw, checks itself against every stop, and takes spin straight from the gyroscope, where no integration is needed.",
+  lead: "Position is two integrations away from what the accelerometer reports, and each one turns a small, constant sensor bias into an error that grows with time. Six seconds of naive integration can put the ball metres from where it is. The pipeline only ever integrates across one kick, checks itself against every stop, and takes spin straight from the gyroscope, where no integration is needed.",
   /** One-line honesty note under the stat chips. */
   modelNote:
-    "Both models omit drag and Magnus lift, so real arcs land a little shorter and steeper than the drag-free ones drawn here, and the drift figures describe a simulated sensor, not a bench measurement.",
+    "Both models omit drag and Magnus lift, and on a soccer ball at shooting speed neither is small: a real shot lands shorter and steeper than the drag-free arcs drawn here, and a curled one bends sideways, which a side view cannot show. The drift figures describe a simulated sensor, not a bench measurement.",
 } as const;
 
 /** Closing stat chips: the Flight-analysis project card's own metrics. */
@@ -46,14 +47,15 @@ export const DRIFT_MODEL = {
   /** Length of the simulated recording, seconds. */
   windowS: 6,
   /**
-   * The one throw inside the recording, seconds: a sin² launch pulse that
-   * brings the ball to release speed, free flight along the launch axis,
-   * and a sin² catch pulse that stops it. The three sum to 1.2 s.
+   * The one kick inside the recording, seconds: a sin² kick pulse that
+   * brings the ball to speed, free flight along the launch axis, and a
+   * sin² landing pulse that stops it (the bounce and roll-out collapsed
+   * into one stop). The three sum to 1.6 s.
    */
-  throw: { startS: 2.0, launchPulseS: 0.25, flightS: 0.75, catchPulseS: 0.2 },
-  /** Release conditions of the simulated throw — the release explorer's defaults. */
-  releaseSpeedMs: 7.5,
-  launchAngleDeg: 48,
+  kick: { startS: 2.0, kickPulseS: 0.02, flightS: 1.53, landingPulseS: 0.05 },
+  /** State at the foot for the simulated kick — the release explorer's defaults. */
+  ballSpeedMs: 20,
+  launchAngleDeg: 22,
   gravityMs2: 9.81,
   /** Accelerometer white noise, 1σ per sample, m/s². */
   noiseSigmaMs2: 0.15,
@@ -65,10 +67,14 @@ export const DRIFT_MODEL = {
   bias: { min: 0, max: 0.2, step: 0.01, default: 0.05 },
 } as const;
 
+/** Length of the kick window, s — quoted in the copy below. */
+const KICK_S =
+  DRIFT_MODEL.kick.kickPulseS + DRIFT_MODEL.kick.flightS + DRIFT_MODEL.kick.landingPulseS;
+const KICK_S_TEXT = KICK_S.toFixed(1);
+
 export const DRIFT_COPY = {
   title: "The drift problem",
-  description:
-    "One 1.2 s throw inside a 6 s recording, still before and after. Both traces integrate the same simulated accelerometer, 100 Hz with 0.15 m/s² of noise plus the bias you set, and what is plotted is how far each answer sits from the true position.",
+  description: `One ${KICK_S_TEXT} s kick inside a ${DRIFT_MODEL.windowS} s recording, still before and after. Both traces integrate the same simulated accelerometer, ${DRIFT_MODEL.sampleRateHz} Hz with ${DRIFT_MODEL.noiseSigmaMs2} m/s² of noise plus the bias you set and no 16 g ceiling (that is the telemetry section's problem), and what is plotted is how far each answer sits from the true position.`,
   mode: {
     label: "Traces shown",
     options: [
@@ -88,59 +94,93 @@ export const DRIFT_COPY = {
     /** Takes the display unit ("m" or "cm"). */
     y: (unit: string) => `position error (${unit})`,
   },
-  /** Band over the throw; takes its length in seconds. */
-  throwBand: (seconds: string) => `throw · ${seconds} s`,
+  /** Band over the kick; takes its length in seconds. */
+  kickBand: (seconds: string) => `kick · ${seconds} s`,
   stillLabel: "still",
   /** Readout label; takes the recording length in seconds. */
   readout: (seconds: string) => `error at ${seconds} s`,
   /** Crosshair time prefix. */
   hoverTime: "t",
-  why: "Why the pipeline wins: a constant bias integrates into a velocity ramp and then a position parabola, so the naive error grows with the square of the time since velocity was last known. The pipeline never lets that clock run past one throw: every detected stillness is a free, exact velocity measurement of 0 m/s, and subtracting the residual velocity linearly across the window cancels a constant bias outright. What survives is the noise's random walk over 1.2 s: centimetres, not metres.",
+  why: `Why the pipeline wins: a constant bias integrates into a velocity ramp and then a position parabola, so the naive error grows with the square of the time since velocity was last known. The pipeline never lets that clock run past one kick: every detected stillness is a free, exact velocity measurement of 0 m/s, and subtracting the residual velocity linearly across the window cancels a constant bias outright. What survives is the noise's random walk over ${KICK_S_TEXT} s: centimetres, not metres.`,
   /** Screen-reader outcome; takes the bias and both formatted errors. */
   summary: (bias: string, naive: string, pipeline: string) =>
-    `With an accelerometer bias of ${bias} m/s², integrating the recording naively puts the ball ${naive} from where it really is after 6 seconds. The Intelleball pipeline, which pins velocity to zero at every detected stillness and corrects each throw window against its known stop, is off by ${pipeline}.`,
+    `With an accelerometer bias of ${bias} m/s², integrating the recording naively puts the ball ${naive} from where it really is after ${DRIFT_MODEL.windowS} seconds. The Intelleball pipeline, which pins velocity to zero at every detected stillness and corrects each kick window against its known stop, is off by ${pipeline}.`,
 };
 
 /* ── Release explorer ────────────────────────────────────────────────── */
 
 export const RELEASE_MODEL = {
-  angle: { min: 20, max: 70, step: 1, default: 48 },
-  speed: { min: 4, max: 12, step: 0.1, default: 7.5 },
-  /** Height of the ball at release, metres above the ground. */
-  releaseHeightM: 2.0,
+  /** Launch angle: driven shots sit low, lofted passes up to ~45°. */
+  angle: { min: 5, max: 45, step: 1, default: 22 },
+  /** Ball speed off the foot: passes 8–15 m/s, shots 18–30 m/s. */
+  speed: { min: 8, max: 30, step: 0.1, default: 20 },
+  /** Distance from the kick to the goal line, metres — the penalty spot is 11 m, the edge of the box 16.5 m. */
+  goalLine: { min: 6, max: 35, step: 0.5, default: 18 },
   /**
-   * Height the flight is measured to, metres. 3.05 m is a regulation
-   * basketball rim by default; the UI only ever calls it "target height",
-   * so changing it here re-targets the whole explorer.
+   * Ball radius, metres. A ball kicked off the ground starts with its
+   * centre one radius up, and lands when the centre comes back down to it.
    */
-  targetHeightM: 3.05,
+  ballRadiusM: 0.11,
+  /** Height of the crossbar, metres (laws of the game). */
+  crossbarHeightM: 2.44,
   gravityMs2: 9.81,
   /**
    * Fixed extents of the to-scale side view, metres, so the arc keeps one
-   * scale while the sliders move. Sized to the fastest, highest throw the
-   * sliders allow (≈13.5 m to the target, ≈8.5 m apex).
+   * scale while the sliders move. Sized around the goal-line slider, not
+   * the fastest, highest kick the sliders allow: that one leaves the frame
+   * (the arc is clipped) and the readouts carry its numbers.
    */
-  world: { widthM: 15, heightM: 9 },
+  world: { widthM: 36, heightM: 12 },
   /** Polyline resolution of the drawn arc. */
   arcSamples: 72,
 } as const;
 
+/**
+ * How the ball meets the goal line: the whole ball clears the bar, the whole
+ * ball passes under it, some of it meets it, or it lands before the line.
+ */
+export type GoalVerdict = "under" | "over" | "bar" | "short";
+
 export const RELEASE_COPY = {
   title: "Release explorer",
   description:
-    "Release speed and launch angle are what the pipeline reads at the instant the ball leaves the hand. Set them and the projectile model fills in the rest of the throw: apex, hang time, range and entry angle, measured to where the arc comes back down through the target height.",
+    "Ball speed and launch angle are what the pipeline reads at the instant the ball leaves the foot. Set them, put the goal line where you like, and the projectile model fills in the rest of the kick: apex, hang time, range, and how high the ball's centre is when it crosses the line, against the crossbar.",
   angle: { label: "Launch angle", unit: "°" },
-  speed: { label: "Release speed", unit: "m/s" },
-  marks: { release: "release", apex: "apex", target: "target height", ground: "ground" },
+  speed: { label: "Ball speed", unit: "m/s" },
+  goalLine: { label: "Goal line", unit: "m" },
+  marks: { kick: "kick", apex: "apex", crossbar: "crossbar", goalLine: "goal line", ground: "ground" },
   axes: { x: "distance (m)", y: "height (m)" },
-  readouts: { apex: "Apex height", hangTime: "Hang time", range: "Range", entryAngle: "Entry angle" },
-  /** Shown when the apex is below the target height; takes the shortfall in metres. */
-  unreachable: (shortfall: string) =>
-    `The arc peaks ${shortfall} m below the target height, so it never gets there: hang time, range and entry angle are undefined for this throw.`,
-  /** Screen-reader outcome for a throw that reaches the target height. */
-  summary: (angle: string, speed: string, apex: string, hangTime: string, range: string, entry: string) =>
-    `At ${angle}° and ${speed} m/s from a ${RELEASE_MODEL.releaseHeightM.toFixed(1)} m release, the ball peaks at ${apex} m and comes back down through the ${RELEASE_MODEL.targetHeightM.toFixed(2)} m target height after ${hangTime} s, ${range} m downrange, entering at ${entry}°.`,
-  /** Screen-reader outcome for a throw that never reaches the target height. */
-  summaryUnreachable: (angle: string, speed: string, apex: string) =>
-    `At ${angle}° and ${speed} m/s from a ${RELEASE_MODEL.releaseHeightM.toFixed(1)} m release, the ball peaks at ${apex} m, below the ${RELEASE_MODEL.targetHeightM.toFixed(2)} m target height, so it never reaches it.`,
+  readouts: { apex: "Apex height", hangTime: "Hang time", range: "Range", atGoalLine: "Height at the line" },
+  /** Plain-words verdict under the readouts, and its label. */
+  verdictLabel: "At the line",
+  verdict: {
+    under: "under the bar",
+    over: "over the bar",
+    bar: "hits the bar",
+  } satisfies Record<Exclude<GoalVerdict, "short">, string>,
+  /** The verdict for a kick that lands short; takes the shortfall in metres. */
+  verdictShort: (shortfall: string) => `bounces ${shortfall} m before the line`,
+  /** Screen-reader outcome for a kick that reaches the goal line in the air. */
+  summary: (
+    angle: string,
+    speed: string,
+    apex: string,
+    hangTime: string,
+    range: string,
+    goalLine: string,
+    atLine: string,
+    verdict: string
+  ) =>
+    `At ${angle}° and ${speed} m/s off the foot, kicked from the ground, the ball peaks at ${apex} m, lands ${range} m away after ${hangTime} s, and crosses the goal line ${goalLine} m out with its centre at ${atLine} m: ${verdict} (the underside of the crossbar is ${RELEASE_MODEL.crossbarHeightM.toFixed(2)} m).`,
+  /** Screen-reader outcome for a kick that lands before the goal line; takes the shortfall in metres. */
+  summaryShort: (
+    angle: string,
+    speed: string,
+    apex: string,
+    hangTime: string,
+    range: string,
+    goalLine: string,
+    shortfall: string
+  ) =>
+    `At ${angle}° and ${speed} m/s off the foot, kicked from the ground, the ball peaks at ${apex} m and lands ${range} m away after ${hangTime} s, ${shortfall} m before the goal line ${goalLine} m out: it bounces before the line.`,
 };
